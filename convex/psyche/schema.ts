@@ -1,0 +1,75 @@
+import { defineTable } from 'convex/server';
+import { v } from 'convex/values';
+
+export const psycheTables = {
+  // Live need state for each agent
+  agentNeeds: defineTable({
+    worldId: v.id('worlds'),
+    agentId: v.string(), // GameId<'agents'>
+    needId: v.string(),
+    currentValue: v.float64(),
+    lastUpdated: v.float64(), // game-time timestamp
+  })
+    .index('by_agent', ['worldId', 'agentId'])
+    .index('by_agent_need', ['worldId', 'agentId', 'needId']),
+
+  // Decision log for debug panel — stores scorer output each time agent decides
+  psycheDecisionLog: defineTable({
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+    timestamp: v.float64(),
+    // The action that was chosen
+    chosenActionId: v.string(),
+    chosenActionName: v.string(),
+    chosenActionEmoji: v.string(),
+    chosenScore: v.float64(),
+    // Top 5 alternatives with scores for comparison
+    alternatives: v.array(
+      v.object({
+        actionId: v.string(),
+        actionName: v.string(),
+        actionEmoji: v.string(),
+        score: v.float64(),
+      }),
+    ),
+    // Snapshot of need values at decision time
+    needsSnapshot: v.array(
+      v.object({
+        needId: v.string(),
+        currentValue: v.float64(),
+        maxValue: v.float64(),
+        isCritical: v.boolean(),
+      }),
+    ),
+    // Which location the agent was at
+    location: v.string(),
+  }).index('by_agent', ['worldId', 'agentId']),
+
+  // Travel commitment — stores the intended action when agent walks to a location.
+  // Prevents flip-flopping: agent commits to an action through travel + execution.
+  agentIntents: defineTable({
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+    actionId: v.string(),
+    actionName: v.string(),
+    actionDescription: v.string(),
+    actionEmoji: v.string(),
+    actionDuration: v.float64(), // game-minutes
+    replenishes: v.array(
+      v.object({
+        needId: v.string(),
+        amount: v.float64(),
+      }),
+    ),
+    costs: v.array(
+      v.object({
+        needId: v.string(),
+        amount: v.float64(),
+      }),
+    ),
+    targetLocation: v.string(),
+    // Snapshot of which needs were critical at decision time.
+    // Used to detect new critical needs during travel (override trigger).
+    criticalNeedsAtDecision: v.array(v.string()),
+  }).index('by_agent', ['worldId', 'agentId']),
+};

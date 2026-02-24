@@ -36,15 +36,12 @@ export const heartbeatWorld = mutation({
     }
     const now = Date.now();
 
-    // Skip the update (and then potentially make the transaction readonly)
-    // if it's been viewed sufficiently recently..
     if (!worldStatus.lastViewed || worldStatus.lastViewed < now - WORLD_HEARTBEAT_INTERVAL / 2) {
       await ctx.db.patch(worldStatus._id, {
         lastViewed: Math.max(worldStatus.lastViewed ?? now, now),
       });
     }
 
-    // Restart inactive worlds, but leave worlds explicitly stopped by the developer alone.
     if (worldStatus.status === 'stoppedByDeveloper') {
       console.debug(`World ${worldStatus._id} is stopped by developer, not restarting.`);
     }
@@ -74,8 +71,6 @@ export const stopInactiveWorlds = internalMutation({
 export const restartDeadWorlds = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
-
-    // Restart an engine if it hasn't run for 2x its action duration.
     const engineTimeout = now - ENGINE_ACTION_DURATION * 2;
     const worlds = await ctx.db.query('worldStatus').collect();
     for (const worldStatus of worlds) {
@@ -98,12 +93,7 @@ export const userStatus = query({
   args: {
     worldId: v.id('worlds'),
   },
-  handler: async (ctx, args) => {
-    // const identity = await ctx.auth.getUserIdentity();
-    // if (!identity) {
-    //   return null;
-    // }
-    // return identity.tokenIdentifier;
+  handler: async () => {
     return DEFAULT_NAME;
   },
 });
@@ -113,27 +103,15 @@ export const joinWorld = mutation({
     worldId: v.id('worlds'),
   },
   handler: async (ctx, args) => {
-    // const identity = await ctx.auth.getUserIdentity();
-    // if (!identity) {
-    //   throw new ConvexError(`Not logged in`);
-    // }
-    // const name =
-    //   identity.givenName || identity.nickname || (identity.email && identity.email.split('@')[0]);
     const name = DEFAULT_NAME;
-
-    // if (!name) {
-    //   throw new ConvexError(`Missing name on ${JSON.stringify(identity)}`);
-    // }
     const world = await ctx.db.get(args.worldId);
     if (!world) {
       throw new ConvexError(`Invalid world ID: ${args.worldId}`);
     }
-    // const { tokenIdentifier } = identity;
     return await insertInput(ctx, world._id, 'join', {
       name,
       character: characters[Math.floor(Math.random() * characters.length)].name,
       description: `${DEFAULT_NAME} is a human player`,
-      // description: `${identity.givenName} is a human player`,
       tokenIdentifier: DEFAULT_NAME,
     });
   },
@@ -144,16 +122,10 @@ export const leaveWorld = mutation({
     worldId: v.id('worlds'),
   },
   handler: async (ctx, args) => {
-    // const identity = await ctx.auth.getUserIdentity();
-    // if (!identity) {
-    //   throw new Error(`Not logged in`);
-    // }
-    // const { tokenIdentifier } = identity;
     const world = await ctx.db.get(args.worldId);
     if (!world) {
       throw new Error(`Invalid world ID: ${args.worldId}`);
     }
-    // const existingPlayer = world.players.find((p) => p.human === tokenIdentifier);
     const existingPlayer = world.players.find((p) => p.human === DEFAULT_NAME);
     if (!existingPlayer) {
       return;
@@ -171,10 +143,6 @@ export const sendWorldInput = mutation({
     args: v.any(),
   },
   handler: async (ctx, args) => {
-    // const identity = await ctx.auth.getUserIdentity();
-    // if (!identity) {
-    //   throw new Error(`Not logged in`);
-    // }
     return await engineInsertInput(ctx, args.engineId, args.name as any, args.args);
   },
 });
@@ -233,8 +201,6 @@ export const previousConversation = query({
     playerId,
   },
   handler: async (ctx, args) => {
-    // Walk the player's history in descending order, looking for a nonempty
-    // conversation.
     const members = ctx.db
       .query('participatedTogether')
       .withIndex('playerHistory', (q) => q.eq('worldId', args.worldId).eq('player1', args.playerId))

@@ -4,13 +4,9 @@ import { agentTables } from './agent/schema';
 import { aiTownTables } from './aiTown/schema';
 import { conversationId, playerId } from './aiTown/ids';
 import { engineTables } from './engine/schema';
+import { psycheTables } from './psyche/schema';
 
 export default defineSchema({
-  music: defineTable({
-    storageId: v.string(),
-    type: v.union(v.literal('background'), v.literal('player')),
-  }),
-
   messages: defineTable({
     conversationId,
     messageUuid: v.string(),
@@ -24,4 +20,5 @@ export default defineSchema({
   ...agentTables,
   ...aiTownTables,
   ...engineTables,
+  ...psycheTables,
 });

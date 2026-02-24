@@ -9,6 +9,7 @@ import { useSendInput } from '../hooks/sendInput';
 import { Player } from '../../convex/aiTown/player';
 import { GameId } from '../../convex/aiTown/ids';
 import { ServerGame } from '../hooks/serverGame';
+import PsychePanel from './PsychePanel';
 
 export default function PlayerDetails({
   worldId,
@@ -56,7 +57,7 @@ export default function PlayerDetails({
   if (!playerId) {
     return (
       <div className="h-full text-xl flex text-center items-center p-4">
-        Click on an agent on the map to see chat history.
+        Click on an agent to observe their psyche — needs, decisions, and inner state.
       </div>
     );
   }
@@ -233,6 +234,9 @@ export default function PlayerDetails({
           )}
         </p>
       </div>
+      {!isMe && (
+        <PsychePanel worldId={worldId} game={game} playerId={playerId} />
+      )}
       {!isMe && playerConversation && playerStatus?.kind === 'participating' && (
         <Messages
           worldId={worldId}
