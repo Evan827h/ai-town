@@ -161,6 +161,181 @@ export const clearAgentIntent = internalMutation({
   },
 });
 
+// ─── Relationship functions ──────────────────────────────────
+
+/** Get all relationships for an agent (internal — used by agent loop) */
+export const getRelationshipsForAgent = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentRelationships')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('fromAgentId', args.agentId))
+      .collect();
+  },
+});
+
+/** Get a specific relationship edge (internal) */
+export const getRelationship = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    fromAgentId: v.string(),
+    toAgentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentRelationships')
+      .withIndex('by_pair', (q) =>
+        q.eq('worldId', args.worldId).eq('fromAgentId', args.fromAgentId).eq('toAgentId', args.toAgentId),
+      )
+      .unique();
+  },
+});
+
+/** Insert or update a relationship edge */
+export const upsertRelationship = internalMutation({
+  args: {
+    worldId: v.id('worlds'),
+    fromAgentId: v.string(),
+    toAgentId: v.string(),
+    trust: v.float64(),
+    affinity: v.float64(),
+    respect: v.float64(),
+    frequency: v.float64(),
+    familiarity: v.float64(),
+    lastInteraction: v.float64(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('agentRelationships')
+      .withIndex('by_pair', (q) =>
+        q.eq('worldId', args.worldId).eq('fromAgentId', args.fromAgentId).eq('toAgentId', args.toAgentId),
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        trust: args.trust,
+        affinity: args.affinity,
+        respect: args.respect,
+        frequency: args.frequency,
+        familiarity: args.familiarity,
+        lastInteraction: args.lastInteraction,
+      });
+    } else {
+      await ctx.db.insert('agentRelationships', args);
+    }
+  },
+});
+
+/** Initialize both directions of a relationship pair */
+export const initializeRelationshipPair = internalMutation({
+  args: {
+    worldId: v.id('worlds'),
+    agent1Id: v.string(),
+    agent2Id: v.string(),
+    edge1: v.object({
+      trust: v.float64(),
+      affinity: v.float64(),
+      respect: v.float64(),
+      frequency: v.float64(),
+      familiarity: v.float64(),
+      lastInteraction: v.float64(),
+    }),
+    edge2: v.object({
+      trust: v.float64(),
+      affinity: v.float64(),
+      respect: v.float64(),
+      frequency: v.float64(),
+      familiarity: v.float64(),
+      lastInteraction: v.float64(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const existing1 = await ctx.db
+      .query('agentRelationships')
+      .withIndex('by_pair', (q) =>
+        q.eq('worldId', args.worldId).eq('fromAgentId', args.agent1Id).eq('toAgentId', args.agent2Id),
+      )
+      .unique();
+    if (!existing1) {
+      await ctx.db.insert('agentRelationships', {
+        worldId: args.worldId,
+        fromAgentId: args.agent1Id,
+        toAgentId: args.agent2Id,
+        ...args.edge1,
+      });
+    }
+
+    const existing2 = await ctx.db
+      .query('agentRelationships')
+      .withIndex('by_pair', (q) =>
+        q.eq('worldId', args.worldId).eq('fromAgentId', args.agent2Id).eq('toAgentId', args.agent1Id),
+      )
+      .unique();
+    if (!existing2) {
+      await ctx.db.insert('agentRelationships', {
+        worldId: args.worldId,
+        fromAgentId: args.agent2Id,
+        toAgentId: args.agent1Id,
+        ...args.edge2,
+      });
+    }
+  },
+});
+
+/** Get all relationships for an agent (public — for debug UI) */
+export const getAgentRelationships = query({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentRelationships')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('fromAgentId', args.agentId))
+      .collect();
+  },
+});
+
+/** Find the other participant in a conversation and both player names (for relationship init) */
+export const getConversationParticipants = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    playerId: v.string(),
+    conversationId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const participation = await ctx.db
+      .query('participatedTogether')
+      .withIndex('conversation', (q) =>
+        q.eq('worldId', args.worldId).eq('player1', args.playerId).eq('conversationId', args.conversationId),
+      )
+      .first();
+
+    if (!participation) return null;
+
+    const otherPlayerId = participation.player2;
+
+    const myDesc = await ctx.db
+      .query('playerDescriptions')
+      .withIndex('worldId', (q) => q.eq('worldId', args.worldId).eq('playerId', args.playerId))
+      .first();
+    const otherDesc = await ctx.db
+      .query('playerDescriptions')
+      .withIndex('worldId', (q) => q.eq('worldId', args.worldId).eq('playerId', otherPlayerId))
+      .first();
+
+    return {
+      otherPlayerId,
+      myName: myDesc?.name ?? 'Unknown',
+      otherName: otherDesc?.name ?? 'Unknown',
+    };
+  },
+});
+
 /** Log a psyche decision for the debug panel */
 export const logDecision = internalMutation({
   args: {

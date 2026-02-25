@@ -72,4 +72,19 @@ export const psycheTables = {
     // Used to detect new critical needs during travel (override trigger).
     criticalNeedsAtDecision: v.array(v.string()),
   }).index('by_agent', ['worldId', 'agentId']),
+
+  // Directed relationship edges between agents
+  agentRelationships: defineTable({
+    worldId: v.id('worlds'),
+    fromAgentId: v.string(), // observer
+    toAgentId: v.string(), // target
+    trust: v.float64(), // -100..100
+    affinity: v.float64(), // -100..100
+    respect: v.float64(), // -100..100
+    frequency: v.float64(), // 0..100, decays
+    familiarity: v.float64(), // 0..100, only grows
+    lastInteraction: v.float64(), // game-time timestamp
+  })
+    .index('by_agent', ['worldId', 'fromAgentId'])
+    .index('by_pair', ['worldId', 'fromAgentId', 'toAgentId']),
 };
