@@ -50,12 +50,58 @@ export interface ActionDefinition {
   costs: ActionEffect[];
   /** Conditions that must be met */
   requires?: ActionRequirement[];
+  /** Which relationship dimensions matter for this action (weights sum to ~1.0) */
+  socialWeights?: SocialWeights;
 }
 
 export interface ScoredAction {
   action: ActionDefinition;
   score: number;
 }
+
+// ─── Relationship Graph Types ────────────────────────────────
+
+export interface SocialWeights {
+  trust?: number;
+  affinity?: number;
+  respect?: number;
+  frequency?: number;
+  familiarity?: number;
+}
+
+/** Directed, weighted edge between two agents */
+export interface RelationshipEdge {
+  fromAgentId: string;
+  toAgentId: string;
+  /** How much the agent trusts the other (-100..100) */
+  trust: number;
+  /** How much the agent likes the other (-100..100) */
+  affinity: number;
+  /** How much the agent respects the other (-100..100) */
+  respect: number;
+  /** How often they interact — decays over time (0..100) */
+  frequency: number;
+  /** How well they know each other — only grows (0..100) */
+  familiarity: number;
+  /** Timestamp of last interaction (game-time) */
+  lastInteraction: number;
+}
+
+/** Default attitudes a character has toward strangers */
+export interface SocialDisposition {
+  defaultTrust: number;
+  defaultAffinity: number;
+  defaultRespect: number;
+}
+
+/** Outcome types that can result from an interaction */
+export type InteractionOutcome =
+  | 'positive_social'
+  | 'negative_social'
+  | 'helpful'
+  | 'betrayal'
+  | 'impressive'
+  | 'neutral';
 
 // Registry containers — simple Maps, not database rows
 export type NeedRegistry = Map<string, NeedDefinition>;

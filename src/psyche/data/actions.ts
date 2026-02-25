@@ -35,6 +35,7 @@ const actionDefinitions: ActionDefinition[] = [
       { needId: 'fun', amount: 10 },
     ],
     costs: [{ needId: 'hunger', amount: 5 }],
+    socialWeights: { affinity: 0.5, trust: 0.2, frequency: 0.3 },
   },
   {
     id: 'people_watch',
@@ -48,6 +49,7 @@ const actionDefinitions: ActionDefinition[] = [
       { needId: 'fun', amount: 10 },
     ],
     costs: [],
+    socialWeights: { affinity: 0.3, frequency: 0.3, familiarity: 0.4 },
   },
 
   // === Home actions ===
@@ -151,6 +153,7 @@ const actionDefinitions: ActionDefinition[] = [
     duration: 20,
     replenishes: [{ needId: 'social', amount: 25 }],
     costs: [{ needId: 'energy', amount: 5 }],
+    socialWeights: { affinity: 0.4, frequency: 0.4, trust: 0.2 },
   },
   {
     id: 'wander',
