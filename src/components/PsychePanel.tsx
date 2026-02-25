@@ -30,6 +30,12 @@ export default function PsychePanel({
     agentId ? { worldId, agentId: agentId as string } : 'skip',
   );
 
+  // Relationships query uses player ID (relationships are keyed by player ID)
+  const relationships = useQuery(
+    api.psyche.functions.getAgentRelationships,
+    { worldId, agentId: playerId as string },
+  );
+
   if (!agent || !agentId) {
     return null;
   }
@@ -63,6 +69,37 @@ export default function PsychePanel({
         ) : (
           <div className="text-sm text-brown-300 text-center py-2">
             Needs not initialized yet...
+          </div>
+        )}
+      </div>
+
+      {/* ─── Relationships Section ─── */}
+      <div className="box mt-4">
+        <h2 className="bg-brown-700 p-2 font-display text-lg tracking-wider shadow-solid text-center">
+          Relationships
+        </h2>
+      </div>
+      <div className="mt-2 space-y-3">
+        {relationships && relationships.length > 0 ? (
+          relationships.map((rel) => {
+            const targetName = game.playerDescriptions.get(rel.toAgentId as GameId<'players'>)?.name ?? rel.toAgentId;
+            const timeSince = getTimeAgo(rel.lastInteraction);
+            return (
+              <RelationshipCard
+                key={rel.toAgentId}
+                targetName={targetName}
+                trust={rel.trust}
+                affinity={rel.affinity}
+                respect={rel.respect}
+                frequency={rel.frequency}
+                familiarity={rel.familiarity}
+                lastInteraction={timeSince}
+              />
+            );
+          })
+        ) : (
+          <div className="text-sm text-brown-300 text-center py-2">
+            No relationships yet...
           </div>
         )}
       </div>
@@ -232,6 +269,99 @@ function DecisionEntry({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Relationship Card Component ─────────────────────────────
+
+function RelationshipCard({
+  targetName,
+  trust,
+  affinity,
+  respect,
+  frequency,
+  familiarity,
+  lastInteraction,
+}: {
+  targetName: string;
+  trust: number;
+  affinity: number;
+  respect: number;
+  frequency: number;
+  familiarity: number;
+  lastInteraction: string;
+}) {
+  return (
+    <div className="bg-brown-900 rounded px-2.5 py-2">
+      <div className="flex justify-between items-center mb-1.5">
+        <span className="font-bold text-brown-100 text-sm">{targetName}</span>
+        <span className="text-brown-500 text-xs">{lastInteraction}</span>
+      </div>
+      <div className="space-y-1">
+        <BipolarBar label="Trust" value={trust} />
+        <BipolarBar label="Affinity" value={affinity} />
+        <BipolarBar label="Respect" value={respect} />
+        <UnipolarBar label="Frequency" value={frequency} />
+        <UnipolarBar label="Familiarity" value={familiarity} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Bipolar Bar (center-anchored, -100..100) ────────────────
+
+function BipolarBar({ label, value }: { label: string; value: number }) {
+  // Normalize to 0..100 range for positioning (50 = center = 0 value)
+  const normalized = (value + 100) / 2;
+  const isPositive = value >= 0;
+
+  // Bar extends from center (50%) toward left (negative) or right (positive)
+  const barLeft = isPositive ? 50 : normalized;
+  const barWidth = isPositive ? normalized - 50 : 50 - normalized;
+
+  const barColor = isPositive ? 'bg-green-500' : 'bg-red-500';
+
+  return (
+    <div className="px-1">
+      <div className="flex justify-between text-xs mb-0.5">
+        <span className="text-brown-300">{label}</span>
+        <span className={`${isPositive ? 'text-green-400' : 'text-red-400'} tabular-nums`}>
+          {value > 0 ? '+' : ''}{Math.round(value)}
+        </span>
+      </div>
+      <div className="w-full bg-brown-800 h-1.5 rounded-sm relative">
+        {/* Center line */}
+        <div className="absolute top-0 h-full border-l border-brown-500" style={{ left: '50%' }} />
+        {/* Value bar */}
+        <div
+          className={`absolute top-0 h-full rounded-sm transition-all duration-500 ${barColor}`}
+          style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Unipolar Bar (0..100) ───────────────────────────────────
+
+function UnipolarBar({ label, value }: { label: string; value: number }) {
+  const percent = Math.round(value);
+  const isLow = value < 20;
+  const barColor = isLow ? 'bg-brown-600' : 'bg-blue-400';
+
+  return (
+    <div className="px-1">
+      <div className="flex justify-between text-xs mb-0.5">
+        <span className="text-brown-300">{label}</span>
+        <span className="text-brown-400 tabular-nums">{Math.round(value)}</span>
+      </div>
+      <div className="w-full bg-brown-800 h-1.5 rounded-sm">
+        <div
+          className={`h-full rounded-sm transition-all duration-500 ${barColor}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
     </div>
   );
 }
