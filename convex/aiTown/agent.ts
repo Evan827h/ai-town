@@ -22,6 +22,9 @@ import { distance } from '../util/geometry';
 import { internal } from '../_generated/api';
 import { movePlayer } from './movement';
 import { insertInput } from './insertInput';
+import { conversationPreferenceScore } from '../../src/psyche/relationships';
+import { RelationshipEdge } from '../../src/psyche/registries';
+import { DISTANCE_WEIGHT, RELATIONSHIP_WEIGHT } from '../../src/psyche/data/relationships';
 
 export class Agent {
   id: GameId<'agents'>;
@@ -344,6 +347,25 @@ export const findConversationCandidate = internalQuery({
     const { position } = player;
     const candidates = [];
 
+    // Fetch this agent's relationships for preference scoring
+    const relDocs = await ctx.db
+      .query('agentRelationships')
+      .withIndex('by_agent', (q) => q.eq('worldId', worldId).eq('fromAgentId', player.id))
+      .collect();
+    const relMap = new Map<string, RelationshipEdge>();
+    for (const d of relDocs) {
+      relMap.set(d.toAgentId, {
+        fromAgentId: d.fromAgentId,
+        toAgentId: d.toAgentId,
+        trust: d.trust,
+        affinity: d.affinity,
+        respect: d.respect,
+        frequency: d.frequency,
+        familiarity: d.familiarity,
+        lastInteraction: d.lastInteraction,
+      });
+    }
+
     for (const otherPlayer of otherFreePlayers) {
       // Find the latest conversation we're both members of.
       const lastMember = await ctx.db
@@ -358,11 +380,33 @@ export const findConversationCandidate = internalQuery({
           continue;
         }
       }
-      candidates.push({ id: otherPlayer.id, position });
+      candidates.push({ id: otherPlayer.id, position: otherPlayer.position });
     }
 
-    // Sort by distance and take the nearest candidate.
-    candidates.sort((a, b) => distance(a.position, position) - distance(b.position, position));
-    return candidates[0]?.id;
+    if (candidates.length === 0) return undefined;
+
+    // Compute max distance for normalization
+    const maxDist = Math.max(...candidates.map((c) => distance(c.position, position)), 1);
+
+    // Score each candidate: blend distance proximity with relationship preference
+    const scored = candidates.map((c) => {
+      const dist = distance(c.position, position);
+      // Proximity score: 0 (far) to 1 (close)
+      const proximityScore = 1 - dist / maxDist;
+
+      // Relationship preference: 0..1 (0.5 = neutral/stranger)
+      const edge = relMap.get(c.id);
+      const elapsedSinceInteraction = edge ? Math.max(0, now - edge.lastInteraction) / 1000 : 0;
+      const relPref = edge ? conversationPreferenceScore(edge, elapsedSinceInteraction) : 0.5;
+
+      return {
+        id: c.id,
+        score: proximityScore * DISTANCE_WEIGHT + relPref * RELATIONSHIP_WEIGHT,
+      };
+    });
+
+    // Sort by composite score descending
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0]?.id;
   },
 });

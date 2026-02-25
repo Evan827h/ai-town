@@ -21,7 +21,9 @@ import { depleteNeeds, applyActionEffects, initializeNeeds } from '../../src/psy
 import { needRegistry } from '../../src/psyche/data/needs';
 import { getActionsForLocation } from '../../src/psyche/data/actions';
 import { getLocationAtPosition, getLocationDestination } from '../../src/psyche/data/locations';
-import { AgentNeedState } from '../../src/psyche/registries';
+import { AgentNeedState, RelationshipEdge } from '../../src/psyche/registries';
+import { applyRelationshipModifiers, initializeRelationship, updateRelationship } from '../../src/psyche/relationships';
+import { CHARACTER_DISPOSITIONS, DEFAULT_DISPOSITION } from '../../src/psyche/data/relationships';
 
 /**
  * How many game-minutes pass per real second.
@@ -56,6 +58,73 @@ export const agentRememberConversation = internalAction({
       args.playerId as GameId<'players'>,
       args.conversationId as GameId<'conversations'>,
     );
+
+    // ─── Update relationship after conversation ────────────
+    // Default outcome: positive_social (future: parse LLM summary for sentiment)
+    const participants = await ctx.runQuery(internal.psyche.functions.getConversationParticipants, {
+      worldId: args.worldId,
+      playerId: args.playerId,
+      conversationId: args.conversationId,
+    });
+
+    if (participants) {
+      const { otherPlayerId, myName, otherName } = participants;
+      const now = Date.now();
+
+      // Fetch existing edges (may be null for first meeting)
+      const myEdge = await ctx.runQuery(internal.psyche.functions.getRelationship, {
+        worldId: args.worldId,
+        fromAgentId: args.playerId,
+        toAgentId: otherPlayerId,
+      });
+
+      if (myEdge) {
+        // Existing relationship — update with conversation outcome
+        const asEdge: RelationshipEdge = {
+          fromAgentId: myEdge.fromAgentId,
+          toAgentId: myEdge.toAgentId,
+          trust: myEdge.trust,
+          affinity: myEdge.affinity,
+          respect: myEdge.respect,
+          frequency: myEdge.frequency,
+          familiarity: myEdge.familiarity,
+          lastInteraction: myEdge.lastInteraction,
+        };
+        const updated = updateRelationship(asEdge, 'positive_social', now);
+        await ctx.runMutation(internal.psyche.functions.upsertRelationship, {
+          worldId: args.worldId,
+          fromAgentId: args.playerId,
+          toAgentId: otherPlayerId,
+          trust: updated.trust,
+          affinity: updated.affinity,
+          respect: updated.respect,
+          frequency: updated.frequency,
+          familiarity: updated.familiarity,
+          lastInteraction: updated.lastInteraction,
+        });
+      } else {
+        // First meeting — initialize from dispositions then apply positive_social
+        const myDisp = CHARACTER_DISPOSITIONS[myName] ?? DEFAULT_DISPOSITION;
+        const freshEdge = initializeRelationship(myDisp, args.playerId, otherPlayerId, now);
+        const updated = updateRelationship(freshEdge, 'positive_social', now);
+        await ctx.runMutation(internal.psyche.functions.upsertRelationship, {
+          worldId: args.worldId,
+          fromAgentId: args.playerId,
+          toAgentId: otherPlayerId,
+          trust: updated.trust,
+          affinity: updated.affinity,
+          respect: updated.respect,
+          frequency: updated.frequency,
+          familiarity: updated.familiarity,
+          lastInteraction: updated.lastInteraction,
+        });
+      }
+
+      console.log(
+        `[Psyche] ${myName} (${args.playerId}): updated relationship with ${otherName} (${otherPlayerId}) — positive_social`,
+      );
+    }
+
     await sleep(Math.random() * 1000);
     await ctx.runMutation(api.aiTown.main.sendInput, {
       worldId: args.worldId,
@@ -312,7 +381,25 @@ export const agentDoSomething = internalAction({
     );
     const allAvailableActions = [...actionSet.values()];
 
-    const scored = scoreActions(agentNeeds, allAvailableActions, needRegistry);
+    const baseScored = scoreActions(agentNeeds, allAvailableActions, needRegistry);
+
+    // Apply relationship modifiers to social action scores
+    const nearbyPlayerIds = args.otherFreePlayers.map((p) => p.id);
+    const relDocs = await ctx.runQuery(internal.psyche.functions.getRelationshipsForAgent, {
+      worldId: args.worldId,
+      agentId: player.id, // relationships keyed by player ID
+    });
+    const relationships: RelationshipEdge[] = relDocs.map((d: any) => ({
+      fromAgentId: d.fromAgentId,
+      toAgentId: d.toAgentId,
+      trust: d.trust,
+      affinity: d.affinity,
+      respect: d.respect,
+      frequency: d.frequency,
+      familiarity: d.familiarity,
+      lastInteraction: d.lastInteraction,
+    }));
+    const scored = applyRelationshipModifiers(baseScored, relationships, nearbyPlayerIds);
 
     if (scored.length === 0) {
       await sleep(Math.random() * 1000);
