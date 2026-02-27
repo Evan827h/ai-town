@@ -16,7 +16,7 @@ const needDefinitions: NeedDefinition[] = [
     id: 'hunger',
     name: 'Hunger',
     maxValue: 100,
-    depletionRate: 0.15,   // ~11 game-hours to empty from full
+    depletionRate: 0.08, // ~11 game-hours to empty from full
     priorityWeight: 1.2,
     criticalThreshold: 20,
   },
@@ -24,7 +24,7 @@ const needDefinitions: NeedDefinition[] = [
     id: 'energy',
     name: 'Energy',
     maxValue: 100,
-    depletionRate: 0.10,   // ~16.7 game-hours to empty from full
+    depletionRate: 0.08, // ~16.7 game-hours to empty from full
     priorityWeight: 1.0,
     criticalThreshold: 15,
   },
@@ -32,7 +32,7 @@ const needDefinitions: NeedDefinition[] = [
     id: 'social',
     name: 'Social',
     maxValue: 100,
-    depletionRate: 0.08,   // ~20.8 game-hours to empty from full
+    depletionRate: 0.08, // ~20.8 game-hours to empty from full
     priorityWeight: 0.8,
     criticalThreshold: 25,
   },
@@ -40,7 +40,7 @@ const needDefinitions: NeedDefinition[] = [
     id: 'comfort',
     name: 'Comfort',
     maxValue: 100,
-    depletionRate: 0.05,   // ~33.3 game-hours to empty from full
+    depletionRate: 0.05, // ~33.3 game-hours to empty from full
     priorityWeight: 0.6,
     criticalThreshold: 15,
   },
@@ -48,12 +48,10 @@ const needDefinitions: NeedDefinition[] = [
     id: 'fun',
     name: 'Fun',
     maxValue: 100,
-    depletionRate: 0.06,   // ~27.8 game-hours to empty from full
+    depletionRate: 0.06, // ~27.8 game-hours to empty from full
     priorityWeight: 0.7,
     criticalThreshold: 20,
   },
 ];
 
-export const needRegistry: NeedRegistry = new Map(
-  needDefinitions.map((n) => [n.id, n]),
-);
+export const needRegistry: NeedRegistry = new Map(needDefinitions.map((n) => [n.id, n]));

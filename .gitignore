@@ -45,6 +45,9 @@ convex_local*
 
 /docs/
 CLAUDE.md
+.claude/
+
+/convex/_generated/
 
 /.worktree/
 .worktree

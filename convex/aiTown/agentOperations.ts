@@ -22,7 +22,11 @@ import { needRegistry } from '../../src/psyche/data/needs';
 import { getActionsForLocation } from '../../src/psyche/data/actions';
 import { getLocationAtPosition, getLocationDestination } from '../../src/psyche/data/locations';
 import { AgentNeedState, RelationshipEdge } from '../../src/psyche/registries';
-import { applyRelationshipModifiers, initializeRelationship, updateRelationship } from '../../src/psyche/relationships';
+import {
+  applyRelationshipModifiers,
+  initializeRelationship,
+  updateRelationship,
+} from '../../src/psyche/relationships';
 import { CHARACTER_DISPOSITIONS, DEFAULT_DISPOSITION } from '../../src/psyche/data/relationships';
 
 /**
@@ -238,7 +242,7 @@ export const agentDoSomething = internalAction({
     // 6. Apply action effects and log decision
 
     // Step 1: Fetch needs (lazy initialization if first time)
-    let needDocs = await ctx.runQuery(internal.psyche.functions.getAgentNeeds, {
+    let needDocs = await ctx.runQuery(internal.psyche.functions.getAgentNeedsInternal, {
       worldId: args.worldId,
       agentId: agent.id,
     });
@@ -255,7 +259,7 @@ export const agentDoSomething = internalAction({
           lastUpdated: n.lastUpdated,
         })),
       });
-      needDocs = await ctx.runQuery(internal.psyche.functions.getAgentNeeds, {
+      needDocs = await ctx.runQuery(internal.psyche.functions.getAgentNeedsInternal, {
         worldId: args.worldId,
         agentId: agent.id,
       });
@@ -312,6 +316,7 @@ export const agentDoSomething = internalAction({
           pendingIntent.replenishes,
           pendingIntent.costs,
           needRegistry,
+          now,
         );
 
         await ctx.runMutation(internal.psyche.functions.updateAgentNeeds, {
@@ -330,9 +335,24 @@ export const agentDoSomething = internalAction({
         });
 
         // Log as an intent execution (reuse the decision log format)
-        await logPsycheDecision(ctx, args.worldId, agent.id, now,
-          [{ action: { id: pendingIntent.actionId, name: pendingIntent.actionName, emoji: pendingIntent.actionEmoji }, score: 0 }],
-          updatedNeeds, location);
+        await logPsycheDecision(
+          ctx,
+          args.worldId,
+          agent.id,
+          now,
+          [
+            {
+              action: {
+                id: pendingIntent.actionId,
+                name: pendingIntent.actionName,
+                emoji: pendingIntent.actionEmoji,
+              },
+              score: 0,
+            },
+          ],
+          updatedNeeds,
+          location,
+        );
 
         await sleep(Math.random() * 1000);
         await ctx.runMutation(api.aiTown.main.sendInput, {
@@ -490,6 +510,7 @@ export const agentDoSomething = internalAction({
       bestAction.action.replenishes,
       bestAction.action.costs,
       needRegistry,
+      now,
     );
 
     await ctx.runMutation(internal.psyche.functions.updateAgentNeeds, {
@@ -540,13 +561,19 @@ async function logPsycheDecision(
     score: Math.round(s.score * 100) / 100,
   }));
 
+  const CRITICAL_MULTIPLIER = 3;
   const needsSnapshot = needs.map((n) => {
     const def = needRegistry.get(n.needId);
+    const maxValue = def?.maxValue ?? 100;
+    const isCritical = def ? n.currentValue < def.criticalThreshold : false;
+    let urgency = def ? ((maxValue - n.currentValue) / maxValue) * def.priorityWeight : 0;
+    if (isCritical) urgency *= CRITICAL_MULTIPLIER;
     return {
       needId: n.needId,
       currentValue: Math.round(n.currentValue * 100) / 100,
-      maxValue: def?.maxValue ?? 100,
-      isCritical: def ? n.currentValue < def.criticalThreshold : false,
+      maxValue,
+      isCritical,
+      urgencyScore: Math.round(urgency * 100) / 100,
     };
   });
 

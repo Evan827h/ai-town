@@ -39,6 +39,7 @@ export const psycheTables = {
         currentValue: v.float64(),
         maxValue: v.float64(),
         isCritical: v.boolean(),
+        urgencyScore: v.optional(v.float64()),
       }),
     ),
     // Which location the agent was at

@@ -1,5 +1,11 @@
 import { AgentNeedState, NeedRegistry } from './registries';
 
+export interface NeedEffect {
+  needId: string;
+  amount: number;
+  duration?: number;
+}
+
 /**
  * Deplete all agent needs based on elapsed game time.
  *
@@ -43,9 +49,10 @@ export function depleteNeeds(
  */
 export function applyActionEffects(
   needs: AgentNeedState[],
-  replenishes: { needId: string; amount: number }[],
-  costs: { needId: string; amount: number }[],
+  replenishes: NeedEffect[],
+  costs: NeedEffect[],
   needDefs: NeedRegistry,
+  gameTime: number,
 ): AgentNeedState[] {
   // Build a delta map from all effects
   const deltas = new Map<string, number>();
@@ -65,6 +72,7 @@ export function applyActionEffects(
     return {
       ...need,
       currentValue: Math.max(0, Math.min(maxValue, need.currentValue + delta)),
+      lastUpdated: gameTime,
     };
   });
 }

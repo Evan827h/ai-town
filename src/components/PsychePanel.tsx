@@ -31,10 +31,10 @@ export default function PsychePanel({
   );
 
   // Relationships query uses player ID (relationships are keyed by player ID)
-  const relationships = useQuery(
-    api.psyche.functions.getAgentRelationships,
-    { worldId, agentId: playerId as string },
-  );
+  const relationships = useQuery(api.psyche.functions.getAgentRelationships, {
+    worldId,
+    agentId: playerId as string,
+  });
 
   if (!agent || !agentId) {
     return null;
@@ -82,7 +82,9 @@ export default function PsychePanel({
       <div className="mt-2 space-y-3">
         {relationships && relationships.length > 0 ? (
           relationships.map((rel) => {
-            const targetName = game.playerDescriptions.get(rel.toAgentId as GameId<'players'>)?.name ?? rel.toAgentId;
+            const targetName =
+              game.playerDescriptions.get(rel.toAgentId as GameId<'players'>)?.name ??
+              rel.toAgentId;
             const timeSince = getTimeAgo(rel.lastInteraction);
             return (
               <RelationshipCard
@@ -98,9 +100,7 @@ export default function PsychePanel({
             );
           })
         ) : (
-          <div className="text-sm text-brown-300 text-center py-2">
-            No relationships yet...
-          </div>
+          <div className="text-sm text-brown-300 text-center py-2">No relationships yet...</div>
         )}
       </div>
 
@@ -116,9 +116,7 @@ export default function PsychePanel({
             <DecisionEntry key={entry._id} entry={entry} isLatest={i === 0} />
           ))
         ) : (
-          <div className="text-sm text-brown-300 text-center py-2">
-            No decisions yet...
-          </div>
+          <div className="text-sm text-brown-300 text-center py-2">No decisions yet...</div>
         )}
       </div>
     </div>
@@ -145,11 +143,7 @@ function NeedBar({
   const isLow = value < maxValue * 0.4;
 
   // Color: red if critical, yellow if low, green if ok
-  const barColor = isCritical
-    ? 'bg-red-500'
-    : isLow
-      ? 'bg-yellow-500'
-      : 'bg-green-500';
+  const barColor = isCritical ? 'bg-red-500' : isLow ? 'bg-yellow-500' : 'bg-green-500';
 
   const glowClass = isCritical ? 'shadow-[0_0_8px_rgba(239,68,68,0.6)]' : '';
 
@@ -204,12 +198,16 @@ function DecisionEntry({
       currentValue: number;
       maxValue: number;
       isCritical: boolean;
+      urgencyScore?: number;
     }[];
   };
   isLatest: boolean;
 }) {
   const timeAgo = getTimeAgo(entry.timestamp);
   const criticalNeeds = entry.needsSnapshot.filter((n) => n.isCritical);
+
+  // Highest urgency score across all needs, used to normalise the bars
+  const maxUrgency = Math.max(...entry.needsSnapshot.map((n) => n.urgencyScore ?? 0), 0.01);
 
   return (
     <div
@@ -253,19 +251,42 @@ function DecisionEntry({
         </div>
       )}
 
-      {/* Need values at decision time (for latest) */}
+      {/* Need urgency scores at decision time */}
       {isLatest && (
         <div className="mt-1.5 pt-1.5 border-t border-brown-800">
-          <div className="text-xs text-brown-500 mb-0.5">Needs at decision:</div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-            {entry.needsSnapshot.map((n) => (
-              <span
-                key={n.needId}
-                className={`text-xs ${n.isCritical ? 'text-red-400 font-bold' : 'text-brown-400'}`}
-              >
-                {n.needId}: {Math.round(n.currentValue)}
-              </span>
-            ))}
+          <div className="text-xs text-brown-500 mb-1">Need urgency at decision:</div>
+          <div className="space-y-0.5">
+            {[...entry.needsSnapshot]
+              .sort((a, b) => (b.urgencyScore ?? 0) - (a.urgencyScore ?? 0))
+              .map((n) => {
+                const urgency = n.urgencyScore ?? 0;
+                const barPct = Math.round((urgency / maxUrgency) * 100);
+                const barColor = n.isCritical
+                  ? 'bg-red-500'
+                  : urgency / maxUrgency > 0.6
+                    ? 'bg-amber-400'
+                    : 'bg-brown-500';
+                return (
+                  <div key={n.needId} className="flex items-center gap-1.5">
+                    <span
+                      className={`text-xs w-14 shrink-0 ${n.isCritical ? 'text-red-400 font-bold' : 'text-brown-400'}`}
+                    >
+                      {n.needId}
+                    </span>
+                    <div className="flex-1 h-1.5 bg-brown-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${barColor}`}
+                        style={{ width: `${barPct}%` }}
+                      />
+                    </div>
+                    <span
+                      className={`text-xs w-8 text-right tabular-nums ${n.isCritical ? 'text-red-400 font-bold' : 'text-brown-500'}`}
+                    >
+                      {urgency.toFixed(2)}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
@@ -327,7 +348,8 @@ function BipolarBar({ label, value }: { label: string; value: number }) {
       <div className="flex justify-between text-xs mb-0.5">
         <span className="text-brown-300">{label}</span>
         <span className={`${isPositive ? 'text-green-400' : 'text-red-400'} tabular-nums`}>
-          {value > 0 ? '+' : ''}{Math.round(value)}
+          {value > 0 ? '+' : ''}
+          {Math.round(value)}
         </span>
       </div>
       <div className="w-full bg-brown-800 h-1.5 rounded-sm relative">

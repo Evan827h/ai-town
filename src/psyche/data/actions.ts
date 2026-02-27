@@ -59,7 +59,7 @@ const actionDefinitions: ActionDefinition[] = [
     description: 'Sleeping at home',
     emoji: '😴',
     locationRequirement: 'home',
-    duration: 120,
+    duration: 45,
     replenishes: [
       { needId: 'energy', amount: 60 },
       { needId: 'comfort', amount: 20 },
@@ -72,7 +72,7 @@ const actionDefinitions: ActionDefinition[] = [
     description: 'Taking a quick nap',
     emoji: '💤',
     locationRequirement: 'home',
-    duration: 45,
+    duration: 20,
     replenishes: [{ needId: 'energy', amount: 25 }],
     costs: [],
   },
@@ -166,9 +166,7 @@ const actionDefinitions: ActionDefinition[] = [
   },
 ];
 
-export const actionRegistry: ActionRegistry = new Map(
-  actionDefinitions.map((a) => [a.id, a]),
-);
+export const actionRegistry: ActionRegistry = new Map(actionDefinitions.map((a) => [a.id, a]));
 
 /**
  * Location-to-action mapping.

@@ -3,8 +3,22 @@ import { query, internalMutation, internalQuery } from '../_generated/server';
 
 // ─── Queries (for frontend debug panel) ────────────────────────
 
-/** Get all need states for an agent */
+/** Get all need states for an agent (public — for debug UI) */
 export const getAgentNeeds = query({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentNeeds')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .collect();
+  },
+});
+
+/** Get all need states for an agent (internal — for agent loop) */
+export const getAgentNeedsInternal = internalQuery({
   args: {
     worldId: v.id('worlds'),
     agentId: v.string(),
@@ -188,7 +202,10 @@ export const getRelationship = internalQuery({
     return await ctx.db
       .query('agentRelationships')
       .withIndex('by_pair', (q) =>
-        q.eq('worldId', args.worldId).eq('fromAgentId', args.fromAgentId).eq('toAgentId', args.toAgentId),
+        q
+          .eq('worldId', args.worldId)
+          .eq('fromAgentId', args.fromAgentId)
+          .eq('toAgentId', args.toAgentId),
       )
       .unique();
   },
@@ -211,7 +228,10 @@ export const upsertRelationship = internalMutation({
     const existing = await ctx.db
       .query('agentRelationships')
       .withIndex('by_pair', (q) =>
-        q.eq('worldId', args.worldId).eq('fromAgentId', args.fromAgentId).eq('toAgentId', args.toAgentId),
+        q
+          .eq('worldId', args.worldId)
+          .eq('fromAgentId', args.fromAgentId)
+          .eq('toAgentId', args.toAgentId),
       )
       .unique();
 
@@ -257,7 +277,10 @@ export const initializeRelationshipPair = internalMutation({
     const existing1 = await ctx.db
       .query('agentRelationships')
       .withIndex('by_pair', (q) =>
-        q.eq('worldId', args.worldId).eq('fromAgentId', args.agent1Id).eq('toAgentId', args.agent2Id),
+        q
+          .eq('worldId', args.worldId)
+          .eq('fromAgentId', args.agent1Id)
+          .eq('toAgentId', args.agent2Id),
       )
       .unique();
     if (!existing1) {
@@ -272,7 +295,10 @@ export const initializeRelationshipPair = internalMutation({
     const existing2 = await ctx.db
       .query('agentRelationships')
       .withIndex('by_pair', (q) =>
-        q.eq('worldId', args.worldId).eq('fromAgentId', args.agent2Id).eq('toAgentId', args.agent1Id),
+        q
+          .eq('worldId', args.worldId)
+          .eq('fromAgentId', args.agent2Id)
+          .eq('toAgentId', args.agent1Id),
       )
       .unique();
     if (!existing2) {
@@ -311,7 +337,10 @@ export const getConversationParticipants = internalQuery({
     const participation = await ctx.db
       .query('participatedTogether')
       .withIndex('conversation', (q) =>
-        q.eq('worldId', args.worldId).eq('player1', args.playerId).eq('conversationId', args.conversationId),
+        q
+          .eq('worldId', args.worldId)
+          .eq('player1', args.playerId)
+          .eq('conversationId', args.conversationId),
       )
       .first();
 
@@ -360,6 +389,7 @@ export const logDecision = internalMutation({
         currentValue: v.float64(),
         maxValue: v.float64(),
         isCritical: v.boolean(),
+        urgencyScore: v.float64(),
       }),
     ),
     location: v.string(),

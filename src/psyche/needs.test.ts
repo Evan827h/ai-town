@@ -118,6 +118,7 @@ describe('applyActionEffects', () => {
       [{ needId: 'hunger', amount: 40 }],
       [],
       testNeedDefs,
+      0,
     );
 
     const hunger = result.find((n) => n.needId === 'hunger')!;
@@ -131,6 +132,7 @@ describe('applyActionEffects', () => {
       [],
       [{ needId: 'energy', amount: 10 }],
       testNeedDefs,
+      0,
     );
 
     const energy = result.find((n) => n.needId === 'energy')!;
@@ -144,6 +146,7 @@ describe('applyActionEffects', () => {
       [{ needId: 'hunger', amount: 40 }],
       [],
       testNeedDefs,
+      0,
     );
 
     const hunger = result.find((n) => n.needId === 'hunger')!;
@@ -157,6 +160,7 @@ describe('applyActionEffects', () => {
       [],
       [{ needId: 'energy', amount: 20 }],
       testNeedDefs,
+      0,
     );
 
     const energy = result.find((n) => n.needId === 'energy')!;
@@ -170,6 +174,7 @@ describe('applyActionEffects', () => {
       [{ needId: 'hunger', amount: 20 }],
       [{ needId: 'hunger', amount: 5 }],
       testNeedDefs,
+      0,
     );
 
     const hunger = result.find((n) => n.needId === 'hunger')!;

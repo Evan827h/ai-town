@@ -27,7 +27,49 @@ export const characters = [
     name: 'f1',
     textureUrl: '/ai-town/assets/32x32folk.png',
     spritesheetData: f1SpritesheetData,
-    speed: 0.1,
+    speed: 0.15,
+  },
+  {
+    name: 'f2',
+    textureUrl: '/ai-town/assets/32x32folk.png',
+    spritesheetData: f2SpritesheetData,
+    speed: 0.15,
+  },
+  {
+    name: 'f3',
+    textureUrl: '/ai-town/assets/32x32folk.png',
+    spritesheetData: f3SpritesheetData,
+    speed: 0.15,
+  },
+  {
+    name: 'f4',
+    textureUrl: '/ai-town/assets/32x32folk.png',
+    spritesheetData: f4SpritesheetData,
+    speed: 0.15,
+  },
+  {
+    name: 'f5',
+    textureUrl: '/ai-town/assets/32x32folk.png',
+    spritesheetData: f5SpritesheetData,
+    speed: 0.15,
+  },
+  {
+    name: 'f6',
+    textureUrl: '/ai-town/assets/32x32folk.png',
+    spritesheetData: f6SpritesheetData,
+    speed: 0.15,
+  },
+  {
+    name: 'f7',
+    textureUrl: '/ai-town/assets/32x32folk.png',
+    spritesheetData: f7SpritesheetData,
+    speed: 0.15,
+  },
+  {
+    name: 'f8',
+    textureUrl: '/ai-town/assets/32x32folk.png',
+    spritesheetData: f8SpritesheetData,
+    speed: 0.15,
   },
   {
     name: 'f2',
@@ -73,5 +115,5 @@ export const characters = [
   },
 ];
 
-// Characters move at 2 tiles per second (was 0.75).
-export const movementSpeed = 2;
+// Characters move at 3 tiles per second (was 2).
+export const movementSpeed = 3;
