@@ -36,7 +36,8 @@ export function detectMismatchedLLMProvider() {
 
 export interface LLMConfig {
   provider: 'openai' | 'together' | 'ollama' | 'custom';
-  url: string; // Should not have a trailing slash
+  url: string; // Chat URL — should not have a trailing slash
+  embeddingUrl?: string; // Separate embedding URL (defaults to url). Used when chat and embeddings run on different servers.
   chatModel: string;
   embeddingModel: string;
   stopWords: string[];
@@ -99,9 +100,11 @@ export function getLLMConfig(): LLMConfig {
   // Alternative embedding model:
   // embeddingModel: 'llama3'
   // const OLLAMA_EMBEDDING_DIMENSION = 4096,
+  const ollamaHost = process.env.OLLAMA_HOST ?? 'http://127.0.0.1:11434';
   return {
     provider: 'ollama',
-    url: process.env.OLLAMA_HOST ?? 'http://127.0.0.1:11434',
+    url: process.env.OLLAMA_CHAT_HOST ?? ollamaHost,
+    embeddingUrl: ollamaHost,
     chatModel: process.env.OLLAMA_MODEL ?? 'llama3',
     embeddingModel: process.env.OLLAMA_EMBEDDING_MODEL ?? 'mxbai-embed-large',
     stopWords: ['<|eot_id|>'],
@@ -141,6 +144,19 @@ export async function chatCompletion(
   body.model = body.model ?? config.chatModel;
   const stopWords = body.stop ? (typeof body.stop === 'string' ? [body.stop] : body.stop) : [];
   if (config.stopWords) stopWords.push(...config.stopWords);
+  // Disable thinking mode for Qwen3/3.5 models via /no_think soft switch.
+  // The enable_thinking API param has known bugs in llama.cpp, so we use the prompt-level switch.
+  // /no_think must appear at the end of the last user message per Qwen docs.
+  if (body.messages?.length) {
+    body.messages = [...body.messages];
+    const lastUserIdx = body.messages.map((m) => m.role).lastIndexOf('user');
+    if (lastUserIdx >= 0) {
+      body.messages[lastUserIdx] = {
+        ...body.messages[lastUserIdx],
+        content: body.messages[lastUserIdx].content + ' /no_think',
+      };
+    }
+  }
   console.log(body);
   const {
     result: content,
@@ -154,7 +170,14 @@ export async function chatCompletion(
         ...AuthHeaders(),
       },
 
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        // Disable thinking for Qwen3/3.5 models.
+        // Top-level param works on some backends (vLLM, Ollama).
+        enable_thinking: false,
+        // chat_template_kwargs is needed for llama.cpp server.
+        chat_template_kwargs: { enable_thinking: false },
+      }),
     });
     if (!result.ok) {
       const error = await result.text();
@@ -171,9 +194,33 @@ export async function chatCompletion(
       return new ChatCompletionContent(result.body!, stopWords);
     } else {
       const json = (await result.json()) as CreateChatCompletionResponse;
-      const content = json.choices[0].message?.content;
-      if (content === undefined) {
-        throw new Error('Unexpected result from OpenAI: ' + JSON.stringify(json));
+      console.debug('Raw LLM response:', JSON.stringify(json.choices[0]));
+      const choice = json.choices[0];
+      let content = choice.message?.content;
+      // Some thinking models (Qwen3.5, DeepSeek-R1) return content in
+      // reasoning_content when thinking mode can't be disabled. Fall back to it
+      // but try to extract the actual response (not the thinking process).
+      if (!content && (choice.message as any)?.reasoning_content) {
+        console.warn('content empty, falling back to reasoning_content');
+        const reasoning: string = (choice.message as any).reasoning_content;
+        // Try to extract a quoted response or the last paragraph after thinking
+        const quotedMatch = reasoning.match(/"([^"]{5,})"\s*$/);
+        const lastParagraph = reasoning.split(/\n\n/).pop()?.trim();
+        content = quotedMatch?.[1] ?? lastParagraph ?? reasoning;
+      }
+      if (!content) {
+        throw new Error(
+          'LLM returned empty content. If using Qwen3/3.5 with llama.cpp, ' +
+          'start the server with: --chat-template-kwargs \'{"enable_thinking": false}\'. ' +
+          'Raw response: ' + JSON.stringify(json),
+        );
+      }
+      // Strip <think>...</think> blocks from thinking models (Qwen3, DeepSeek-R1, etc.)
+      content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+      // Strip common thinking preambles from reasoning_content fallback
+      content = content.replace(/^Thinking Process:[\s\S]*?\n\n/i, '').trim();
+      if (!content) {
+        throw new Error('LLM response contained only thinking with no actual content');
       }
       console.log(content);
       return content;
@@ -190,7 +237,8 @@ export async function chatCompletion(
 export async function tryPullOllama(model: string, error: string) {
   if (error.includes('try pulling')) {
     console.error('Embedding model not found, pulling from Ollama');
-    const pullResp = await fetch(getLLMConfig().url + '/api/pull', {
+    const config = getLLMConfig();
+    const pullResp = await fetch((config.embeddingUrl ?? config.url) + '/api/pull', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -653,7 +701,8 @@ export class ChatCompletionContent {
     for await (const chunk of this.read()) {
       allContent += chunk;
     }
-    return allContent;
+    // Strip <think>...</think> blocks from thinking models (Qwen3, DeepSeek-R1, etc.)
+    return allContent.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   }
 
   async *splitStream(stream: ReadableStream<Uint8Array>) {
@@ -687,8 +736,9 @@ export class ChatCompletionContent {
 
 export async function ollamaFetchEmbedding(text: string) {
   const config = getLLMConfig();
+  const embeddingUrl = config.embeddingUrl ?? config.url;
   const { result } = await retryWithBackoff(async () => {
-    const resp = await fetch(config.url + '/api/embeddings', {
+    const resp = await fetch(embeddingUrl + '/api/embeddings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useQuery } from 'convex/react';
+import ReactModal from 'react-modal';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import { GameId } from '../../convex/aiTown/ids';
@@ -6,6 +8,8 @@ import { ServerGame } from '../hooks/serverGame';
 
 // Need definitions for display (colors, thresholds)
 import { needRegistry } from '../psyche/data/needs';
+
+type MemoryFilter = 'all' | 'conversation' | 'reflection' | 'relationship';
 
 export default function PsychePanel({
   worldId,
@@ -36,9 +40,25 @@ export default function PsychePanel({
     agentId: playerId as string,
   });
 
+  // Memories modal state
+  const [memoriesOpen, setMemoriesOpen] = useState(false);
+  const [memoryFilter, setMemoryFilter] = useState<MemoryFilter>('all');
+
+  // Only fetch memories when modal is open (no cost when closed)
+  const memories = useQuery(
+    api.agent.memory.getAgentMemories,
+    memoriesOpen ? { worldId, playerId: playerId as string } : 'skip',
+  );
+
+  const playerName = game.playerDescriptions.get(playerId)?.name ?? 'Agent';
+
   if (!agent || !agentId) {
     return null;
   }
+
+  const filteredMemories = memories?.filter(
+    (m) => memoryFilter === 'all' || m.data.type === memoryFilter,
+  );
 
   return (
     <div className="mt-4">
@@ -119,6 +139,78 @@ export default function PsychePanel({
           <div className="text-sm text-brown-300 text-center py-2">No decisions yet...</div>
         )}
       </div>
+
+      {/* ─── Memories Button ─── */}
+      <div className="mt-4">
+        <button
+          onClick={() => setMemoriesOpen(true)}
+          className="w-full bg-brown-700 hover:bg-brown-600 transition-colors p-2 font-display text-lg tracking-wider text-center rounded cursor-pointer"
+        >
+          Memories
+        </button>
+      </div>
+
+      {/* ─── Memories Modal ─── */}
+      <ReactModal
+        isOpen={memoriesOpen}
+        onRequestClose={() => setMemoriesOpen(false)}
+        style={memoryModalStyles}
+        contentLabel="Agent memories"
+        ariaHideApp={false}
+      >
+        <div className="font-body">
+          <h2 className="font-display text-xl tracking-wider text-center mb-4">
+            {playerName}'s Memories
+          </h2>
+
+          {/* Filter tabs */}
+          <div className="flex gap-1.5 mb-4 justify-center flex-wrap">
+            {(['all', 'reflection', 'conversation', 'relationship'] as MemoryFilter[]).map(
+              (tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setMemoryFilter(tab)}
+                  className={`px-3 py-1 text-sm rounded cursor-pointer transition-colors ${
+                    memoryFilter === tab
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {tab !== 'all' && memories
+                    ? ` (${memories.filter((m) => m.data.type === tab).length})`
+                    : ''}
+                </button>
+              ),
+            )}
+          </div>
+
+          {/* Memory list */}
+          <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
+            {!filteredMemories || filteredMemories.length === 0 ? (
+              <div className="text-sm text-gray-400 text-center py-6">
+                {memories && memories.length === 0
+                  ? "No memories yet — this agent hasn't completed any conversations."
+                  : 'No memories of this type.'}
+              </div>
+            ) : (
+              filteredMemories.map((memory) => (
+                <MemoryCard key={memory._id} memory={memory} />
+              ))
+            )}
+          </div>
+
+          {/* Close button */}
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => setMemoriesOpen(false)}
+              className="px-6 py-1.5 bg-gray-700 hover:bg-gray-600 text-sm rounded cursor-pointer transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </ReactModal>
     </div>
   );
 }
@@ -387,6 +479,80 @@ function UnipolarBar({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
+// ─── Memory Card Component ───────────────────────────────────
+
+const memoryTypeBadge: Record<string, { label: string; color: string }> = {
+  reflection: { label: 'Reflection', color: 'bg-blue-600' },
+  conversation: { label: 'Conversation', color: 'bg-green-700' },
+  relationship: { label: 'Relationship', color: 'bg-gray-600' },
+};
+
+function MemoryCard({
+  memory,
+}: {
+  memory: {
+    _id: string;
+    description: string;
+    importance: number;
+    _creationTime: number;
+    data: { type: string };
+  };
+}) {
+  const badge = memoryTypeBadge[memory.data.type] ?? {
+    label: memory.data.type,
+    color: 'bg-gray-600',
+  };
+  const stars = '\u2B50'.repeat(Math.min(Math.round(memory.importance), 9));
+  const timeAgo = getTimeAgo(memory._creationTime);
+
+  return (
+    <div className="bg-[rgb(25,28,45)] rounded px-3 py-2.5 text-sm">
+      {/* Header: stars + time */}
+      <div className="flex justify-between items-start gap-2">
+        <span className="text-xs" title={`Importance: ${memory.importance}/9`}>
+          {stars || '(0)'}
+        </span>
+        <span className="text-gray-500 text-xs shrink-0">{timeAgo}</span>
+      </div>
+      {/* Description */}
+      <p className="text-gray-200 mt-1 leading-snug">{memory.description}</p>
+      {/* Type badge */}
+      <div className="mt-1.5">
+        <span className={`text-xs px-1.5 py-0.5 rounded ${badge.color} text-white`}>
+          {badge.label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal Styles ────────────────────────────────────────────
+
+const memoryModalStyles = {
+  overlay: {
+    backgroundColor: 'rgb(0, 0, 0, 75%)' as const,
+    zIndex: 12,
+  },
+  content: {
+    top: '50%',
+    left: '50%',
+    right: 'auto' as const,
+    bottom: 'auto' as const,
+    marginRight: '-50%',
+    transform: 'translate(-50%, -50%)',
+    maxWidth: '600px',
+    width: '90%',
+    maxHeight: '80vh',
+    border: '10px solid rgb(23, 20, 33)',
+    borderRadius: '0',
+    background: 'rgb(35, 38, 58)',
+    color: 'white',
+    fontFamily: '"Upheaval Pro", "sans-serif"',
+  },
+};
+
+// ─── Utilities ───────────────────────────────────────────────
 
 function getTimeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);

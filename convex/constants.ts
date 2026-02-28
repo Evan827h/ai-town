@@ -44,6 +44,12 @@ export const MAX_CONVERSATION_DURATION = 10 * 60_000; // more time locally
 // Leave a conversation if it has more than 8 messages;
 export const MAX_CONVERSATION_MESSAGES = 8;
 
+// Shorter message limit for conversations during activities (eating, etc.)
+export const MAX_ACTIVITY_CONVERSATION_MESSAGES = 4;
+
+// Max distance (in tiles) for starting an in-place conversation during an activity
+export const ACTIVITY_CONVERSATION_DISTANCE = 5;
+
 // Wait for 1s after sending an input to the engine. We can remove this
 // once we can await on an input being processed.
 export const INPUT_DELAY = 1000;
@@ -52,8 +58,9 @@ export const INPUT_DELAY = 1000;
 // This is over-fetched by 10x so we can prioritize memories by more than relevance.
 export const NUM_MEMORIES_TO_SEARCH = 3;
 
-// Wait for at least two seconds before sending another message.
-export const MESSAGE_COOLDOWN = 2000;
+// Wait for at least 8 seconds before sending another message.
+// Gives players time to read each speech bubble before the next arrives.
+export const MESSAGE_COOLDOWN = 8000;
 
 // Don't run a turn of the agent more than once a second.
 export const AGENT_WAKEUP_THRESHOLD = 1000;
@@ -76,3 +83,6 @@ export const ENGINE_ACTION_DURATION = 30000;
 export const MAX_PATHFINDS_PER_STEP = 16;
 
 export const DEFAULT_NAME = 'Me';
+
+// Action IDs that represent sleeping — agents doing these should not be disturbed.
+export const SLEEP_ACTION_IDS = new Set(['sleep_at_home', 'nap']);

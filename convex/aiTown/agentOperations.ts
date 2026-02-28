@@ -21,13 +21,22 @@ import { depleteNeeds, applyActionEffects, initializeNeeds } from '../../src/psy
 import { needRegistry } from '../../src/psyche/data/needs';
 import { getActionsForLocation } from '../../src/psyche/data/actions';
 import { getLocationAtPosition, getLocationDestination } from '../../src/psyche/data/locations';
-import { AgentNeedState, RelationshipEdge } from '../../src/psyche/registries';
+import { ActionEffect, AgentNeedState, RelationshipEdge } from '../../src/psyche/registries';
 import {
   applyRelationshipModifiers,
   initializeRelationship,
   updateRelationship,
 } from '../../src/psyche/relationships';
 import { CHARACTER_DISPOSITIONS, DEFAULT_DISPOSITION } from '../../src/psyche/data/relationships';
+
+/** Need effects applied when a conversation ends */
+const CONVERSATION_NEED_REPLENISHES: ActionEffect[] = [
+  { needId: 'social', amount: 20 },
+  { needId: 'fun', amount: 8 },
+];
+const CONVERSATION_NEED_COSTS: ActionEffect[] = [
+  { needId: 'energy', amount: 3 },
+];
 
 /**
  * How many game-minutes pass per real second.
@@ -55,7 +64,7 @@ export const agentRememberConversation = internalAction({
     operationId: v.string(),
   },
   handler: async (ctx, args) => {
-    await rememberConversation(
+    const result = await rememberConversation(
       ctx,
       args.worldId,
       args.agentId as GameId<'agents'>,
@@ -63,8 +72,11 @@ export const agentRememberConversation = internalAction({
       args.conversationId as GameId<'conversations'>,
     );
 
+    // rememberConversation returns null if conversation wasn't archived yet
+    const outcome = result?.outcome ?? 'positive_social';
+    const messageCount = result?.messageCount ?? 0;
+
     // ─── Update relationship after conversation ────────────
-    // Default outcome: positive_social (future: parse LLM summary for sentiment)
     const participants = await ctx.runQuery(internal.psyche.functions.getConversationParticipants, {
       worldId: args.worldId,
       playerId: args.playerId,
@@ -83,7 +95,7 @@ export const agentRememberConversation = internalAction({
       });
 
       if (myEdge) {
-        // Existing relationship — update with conversation outcome
+        // Existing relationship — update with LLM-determined outcome
         const asEdge: RelationshipEdge = {
           fromAgentId: myEdge.fromAgentId,
           toAgentId: myEdge.toAgentId,
@@ -94,7 +106,7 @@ export const agentRememberConversation = internalAction({
           familiarity: myEdge.familiarity,
           lastInteraction: myEdge.lastInteraction,
         };
-        const updated = updateRelationship(asEdge, 'positive_social', now);
+        const updated = updateRelationship(asEdge, outcome, now);
         await ctx.runMutation(internal.psyche.functions.upsertRelationship, {
           worldId: args.worldId,
           fromAgentId: args.playerId,
@@ -107,10 +119,10 @@ export const agentRememberConversation = internalAction({
           lastInteraction: updated.lastInteraction,
         });
       } else {
-        // First meeting — initialize from dispositions then apply positive_social
+        // First meeting — initialize from dispositions then apply outcome
         const myDisp = CHARACTER_DISPOSITIONS[myName] ?? DEFAULT_DISPOSITION;
         const freshEdge = initializeRelationship(myDisp, args.playerId, otherPlayerId, now);
-        const updated = updateRelationship(freshEdge, 'positive_social', now);
+        const updated = updateRelationship(freshEdge, outcome, now);
         await ctx.runMutation(internal.psyche.functions.upsertRelationship, {
           worldId: args.worldId,
           fromAgentId: args.playerId,
@@ -125,8 +137,46 @@ export const agentRememberConversation = internalAction({
       }
 
       console.log(
-        `[Psyche] ${myName} (${args.playerId}): updated relationship with ${otherName} (${otherPlayerId}) — positive_social`,
+        `[Psyche] ${myName} (${args.playerId}): updated relationship with ${otherName} (${otherPlayerId}) — ${outcome} (LLM-determined, ${messageCount} messages)`,
       );
+
+      // ─── Apply conversation need effects ────────────────
+      const needDocs = await ctx.runQuery(internal.psyche.functions.getAgentNeedsInternal, {
+        worldId: args.worldId,
+        agentId: args.agentId,
+      });
+
+      if (needDocs.length > 0) {
+        const agentNeeds: AgentNeedState[] = needDocs.map(
+          (d: { needId: string; currentValue: number; lastUpdated: number }) => ({
+            needId: d.needId,
+            currentValue: d.currentValue,
+            lastUpdated: d.lastUpdated,
+          }),
+        );
+
+        const updatedNeeds = applyActionEffects(
+          agentNeeds,
+          CONVERSATION_NEED_REPLENISHES,
+          CONVERSATION_NEED_COSTS,
+          needRegistry,
+          now,
+        );
+
+        await ctx.runMutation(internal.psyche.functions.updateAgentNeeds, {
+          worldId: args.worldId,
+          agentId: args.agentId,
+          needs: updatedNeeds.map((n) => ({
+            needId: n.needId,
+            currentValue: n.currentValue,
+            lastUpdated: n.lastUpdated,
+          })),
+        });
+
+        console.log(
+          `[Psyche] ${myName} (${args.playerId}): conversation needs updated — social +20, fun +8, energy -3`,
+        );
+      }
     }
 
     await sleep(Math.random() * 1000);
@@ -365,6 +415,7 @@ export const agentDoSomething = internalAction({
               description: pendingIntent.actionDescription,
               emoji: pendingIntent.actionEmoji,
               until: now + gameMinutesToRealMs(pendingIntent.actionDuration),
+              actionId: pendingIntent.actionId,
             },
           },
         });
@@ -537,6 +588,7 @@ export const agentDoSomething = internalAction({
           description: bestAction.action.description,
           emoji: bestAction.action.emoji,
           until: now + gameMinutesToRealMs(bestAction.action.duration),
+          actionId: bestAction.action.id,
         },
       },
     });

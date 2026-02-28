@@ -39,6 +39,7 @@ export const activity = v.object({
   description: v.string(),
   emoji: v.optional(v.string()),
   until: v.number(),
+  actionId: v.optional(v.string()),
 });
 export type Activity = Infer<typeof activity>;
 

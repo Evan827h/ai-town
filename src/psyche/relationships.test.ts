@@ -4,6 +4,7 @@ import {
   decayFrequency,
   applyRelationshipModifiers,
   conversationPreferenceScore,
+  parseConversationOutcome,
 } from './relationships';
 import { RelationshipEdge, SocialDisposition, ScoredAction, ActionDefinition } from './registries';
 import { OUTCOME_DELTAS } from './data/relationships';
@@ -282,5 +283,59 @@ describe('conversationPreferenceScore', () => {
     const recent = conversationPreferenceScore(edge, 0);
     const stale = conversationPreferenceScore(edge, 600);
     expect(recent).toBeGreaterThan(stale);
+  });
+});
+
+// ─── parseConversationOutcome ───────────────────────────────
+
+describe('parseConversationOutcome', () => {
+  test('extracts valid outcome and strips label from text', () => {
+    const input = 'We had a great chat about gardening.\nOUTCOME: positive_social';
+    const result = parseConversationOutcome(input);
+    expect(result.outcome).toBe('positive_social');
+    expect(result.cleanText).toBe('We had a great chat about gardening.');
+    expect(result.cleanText).not.toContain('OUTCOME');
+  });
+
+  test('parses all valid outcome types', () => {
+    const outcomes = ['positive_social', 'negative_social', 'helpful', 'betrayal', 'impressive', 'neutral'];
+    for (const outcome of outcomes) {
+      const result = parseConversationOutcome(`Summary text.\nOUTCOME: ${outcome}`);
+      expect(result.outcome).toBe(outcome);
+    }
+  });
+
+  test('falls back to positive_social when no OUTCOME line present', () => {
+    const input = 'We talked about the weather. I enjoyed it.';
+    const result = parseConversationOutcome(input);
+    expect(result.outcome).toBe('positive_social');
+    expect(result.cleanText).toBe(input);
+  });
+
+  test('falls back to positive_social for invalid outcome value', () => {
+    const input = 'Summary.\nOUTCOME: hostile_takeover';
+    const result = parseConversationOutcome(input);
+    expect(result.outcome).toBe('positive_social');
+    expect(result.cleanText).toBe(input.trim());
+  });
+
+  test('handles case-insensitive OUTCOME label', () => {
+    const input = 'We argued.\noutcome: negative_social';
+    const result = parseConversationOutcome(input);
+    expect(result.outcome).toBe('negative_social');
+    expect(result.cleanText).toBe('We argued.');
+  });
+
+  test('handles trailing whitespace after outcome', () => {
+    const input = 'Good chat.\nOUTCOME: helpful   ';
+    const result = parseConversationOutcome(input);
+    expect(result.outcome).toBe('helpful');
+    expect(result.cleanText).toBe('Good chat.');
+  });
+
+  test('handles empty input', () => {
+    const result = parseConversationOutcome('');
+    expect(result.outcome).toBe('positive_social');
+    expect(result.cleanText).toBe('');
   });
 });

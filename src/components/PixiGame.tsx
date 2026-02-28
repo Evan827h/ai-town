@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { useApp } from '@pixi/react';
 import { Player, SelectElement } from './Player.tsx';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PixiStaticMap } from './PixiStaticMap.tsx';
 import PixiViewport from './PixiViewport.tsx';
 import { Viewport } from 'pixi-viewport';
@@ -79,6 +79,35 @@ export const PixiGame = (props: {
     console.log(`Moving to ${JSON.stringify(roundedTiles)}`);
     await toastOnError(moveTo({ playerId: humanPlayerId, destination: roundedTiles }));
   };
+  // ─── Speech bubbles: subscribe to latest conversation messages ───
+  const conversationIdKey = [...props.game.world.conversations.keys()].sort().join(',');
+  const conversationIds = useMemo(
+    () => [...props.game.world.conversations.keys()].map((id) => id as string),
+    [conversationIdKey],
+  );
+
+  const latestMessages = useQuery(
+    api.messages.latestConversationMessages,
+    conversationIds.length > 0 ? { worldId: props.worldId, conversationIds } : 'skip',
+  );
+
+  // Build a map from playerId → bubble info
+  const playerBubbles = useMemo(() => {
+    const bubbles = new Map<string, { text: string; authorName: string; timestamp: number }>();
+    if (!latestMessages) return bubbles;
+    for (const convId of conversationIds) {
+      const msg = latestMessages[convId];
+      if (msg) {
+        bubbles.set(msg.author, {
+          text: msg.text,
+          authorName: msg.authorName,
+          timestamp: msg.timestamp,
+        });
+      }
+    }
+    return bubbles;
+  }, [latestMessages, conversationIdKey]);
+
   const { width, height, tileDim } = props.game.worldMap;
   const players = [...props.game.world.players.values()];
 
@@ -123,6 +152,7 @@ export const PixiGame = (props: {
           isViewer={p.id === humanPlayerId}
           onClick={props.setSelectedElement}
           historicalTime={props.historicalTime}
+          bubbleMessage={playerBubbles.get(p.id as string)}
         />
       ))}
     </PixiViewport>

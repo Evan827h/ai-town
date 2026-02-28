@@ -27,12 +27,14 @@ export class Conversation {
   };
   numMessages: number;
   participants: Map<GameId<'players'>, ConversationMembership>;
+  inPlace: boolean;
 
   constructor(serialized: SerializedConversation) {
     const { id, creator, created, isTyping, lastMessage, numMessages, participants } = serialized;
     this.id = parseGameId('conversations', id);
     this.creator = parseGameId('players', creator);
     this.created = created;
+    this.inPlace = serialized.inPlace ?? false;
     this.isTyping = isTyping && {
       playerId: parseGameId('players', isTyping.playerId),
       messageUuid: isTyping.messageUuid,
@@ -66,7 +68,12 @@ export class Conversation {
     // If the players are both in the "walkingOver" state and they're sufficiently close, transition both
     // of them to "participating" and stop their paths.
     if (member1.status.kind === 'walkingOver' && member2.status.kind === 'walkingOver') {
-      if (playerDistance < CONVERSATION_DISTANCE) {
+      // In-place conversations: skip distance check and position snapping — agents stay put
+      if (this.inPlace) {
+        console.log(`Starting in-place conversation between ${player1.id} and ${player2.id}`);
+        member1.status = { kind: 'participating', started: now };
+        member2.status = { kind: 'participating', started: now };
+      } else if (playerDistance < CONVERSATION_DISTANCE) {
         console.log(`Starting conversation between ${player1.id} and ${player2.id}`);
 
         // First, stop the two players from moving.
@@ -107,19 +114,22 @@ export class Conversation {
     }
 
     // Orient the two players towards each other if they're not moving.
+    // Skip face-orientation for players doing activities (in-place conversations).
     if (member1.status.kind === 'participating' && member2.status.kind === 'participating') {
       const v = normalize(vector(player1.position, player2.position));
-      if (!player1.pathfinding && v) {
+      const p1DoingActivity = player1.activity && player1.activity.until > now;
+      const p2DoingActivity = player2.activity && player2.activity.until > now;
+      if (!player1.pathfinding && !p1DoingActivity && v) {
         player1.facing = v;
       }
-      if (!player2.pathfinding && v) {
+      if (!player2.pathfinding && !p2DoingActivity && v) {
         player2.facing.dx = -v.dx;
         player2.facing.dy = -v.dy;
       }
     }
   }
 
-  static start(game: Game, now: number, player: Player, invitee: Player) {
+  static start(game: Game, now: number, player: Player, invitee: Player, inPlace: boolean = false) {
     if (player.id === invitee.id) {
       throw new Error(`Can't invite yourself to a conversation`);
     }
@@ -147,6 +157,7 @@ export class Conversation {
           { playerId: player.id, invited: now, status: { kind: 'walkingOver' } },
           { playerId: invitee.id, invited: now, status: { kind: 'invited' } },
         ],
+        ...(inPlace ? { inPlace: true } : {}),
       }),
     );
     return { conversationId };
@@ -211,7 +222,7 @@ export class Conversation {
   }
 
   serialize(): SerializedConversation {
-    const { id, creator, created, isTyping, lastMessage, numMessages } = this;
+    const { id, creator, created, isTyping, lastMessage, numMessages, inPlace } = this;
     return {
       id,
       creator,
@@ -220,6 +231,7 @@ export class Conversation {
       lastMessage,
       numMessages,
       participants: serializeMap(this.participants),
+      ...(inPlace ? { inPlace: true } : {}),
     };
   }
 }
@@ -243,6 +255,7 @@ export const serializedConversation = {
   ),
   numMessages: v.number(),
   participants: v.array(v.object(serializedConversationMembership)),
+  inPlace: v.optional(v.boolean()),
 };
 export type SerializedConversation = ObjectType<typeof serializedConversation>;
 

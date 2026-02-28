@@ -40,9 +40,9 @@ export default function Game() {
     return null;
   }
   return (
-    <>
+    <div className="h-full flex flex-col">
       {SHOW_DEBUG_UI && <DebugTimeManager timeManager={timeManager} width={200} height={100} />}
-      <div className="mx-auto w-full max-w grid grid-rows-[240px_1fr] lg:grid-rows-[1fr] lg:grid-cols-[1fr_auto] lg:grow max-w-[1400px] min-h-[480px] game-frame">
+      <div className="flex-1 min-h-0 grid grid-rows-[1fr_auto] lg:grid-rows-[1fr] lg:grid-cols-[1fr_auto] game-frame">
         {/* Game area */}
         <div className="relative overflow-hidden bg-brown-900" ref={gameWrapperRef}>
           <div className="absolute inset-0">
@@ -80,6 +80,6 @@ https://github.com/michalochman/react-pixi-fiber/issues/145#issuecomment-5315492
           />
         </div>
       </div>
-    </>
+    </div>
   );
 }

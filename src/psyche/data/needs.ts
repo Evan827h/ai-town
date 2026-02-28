@@ -25,8 +25,10 @@ const needDefinitions: NeedDefinition[] = [
     name: 'Energy',
     maxValue: 100,
     depletionRate: 0.08, // ~16.7 game-hours to empty from full
-    priorityWeight: 1.0,
-    criticalThreshold: 15,
+    // Low weight means energy barely scores until critical — agents don't sleep preemptively.
+    // High criticalThreshold (35) gives the 3× multiplier enough range to win when truly needed.
+    priorityWeight: 0.2,
+    criticalThreshold: 35,
   },
   {
     id: 'social',

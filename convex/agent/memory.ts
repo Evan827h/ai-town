@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { ActionCtx, DatabaseReader, internalMutation, internalQuery } from '../_generated/server';
+import { ActionCtx, DatabaseReader, internalMutation, internalQuery, query } from '../_generated/server';
 import { Doc, Id } from '../_generated/dataModel';
 import { internal } from '../_generated/api';
 import { LLMMessage, chatCompletion, fetchEmbedding } from '../util/llm';
@@ -7,6 +7,8 @@ import { asyncMap } from '../util/asyncMap';
 import { GameId, agentId, conversationId, playerId } from '../aiTown/ids';
 import { SerializedPlayer } from '../aiTown/player';
 import { memoryFields } from './schema';
+import { parseConversationOutcome } from '../../src/psyche/relationships';
+import { InteractionOutcome } from '../../src/psyche/registries';
 
 // How long to wait before updating a memory's last access time.
 export const MEMORY_ACCESS_THROTTLE = 300_000; // In ms
@@ -21,6 +23,21 @@ export type MemoryOfType<T extends MemoryType> = Omit<Memory, 'data'> & {
   data: Extract<Memory['data'], { type: T }>;
 };
 
+export const getAgentMemories = query({
+  args: {
+    worldId: v.id('worlds'),
+    playerId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const memories = await ctx.db
+      .query('memories')
+      .withIndex('playerId', (q) => q.eq('playerId', args.playerId))
+      .order('desc')
+      .take(50);
+    return memories;
+  },
+});
+
 export async function rememberConversation(
   ctx: ActionCtx,
   worldId: Id<'worlds'>,
@@ -33,6 +50,10 @@ export async function rememberConversation(
     playerId,
     conversationId,
   });
+  if (!data) {
+    console.debug(`Conversation ${conversationId} not yet archived, skipping memory creation`);
+    return;
+  }
   const { player, otherPlayer } = data;
   const messages = await ctx.runQuery(selfInternal.loadMessages, { worldId, conversationId });
   if (!messages.length) {
@@ -42,9 +63,14 @@ export async function rememberConversation(
   const llmMessages: LLMMessage[] = [
     {
       role: 'user',
-      content: `You are ${player.name}, and you just finished a conversation with ${otherPlayer.name}. I would
-      like you to summarize the conversation from ${player.name}'s perspective, using first-person pronouns like
-      "I," and add if you liked or disliked this interaction.`,
+      content: `You are ${player.name}, and you just finished a conversation with ${otherPlayer.name}. I would like you to summarize the conversation from ${player.name}'s perspective, using first-person pronouns like "I," and add if you liked or disliked this interaction.
+
+After your summary, on a new line, write exactly one of these labels to classify the interaction:
+OUTCOME: positive_social
+OUTCOME: negative_social
+OUTCOME: helpful
+OUTCOME: impressive
+OUTCOME: neutral`,
     },
   ];
   const authors = new Set<GameId<'players'>>();
@@ -62,9 +88,11 @@ export async function rememberConversation(
     messages: llmMessages,
     max_tokens: 500,
   });
+  // Parse OUTCOME: label from LLM output and strip it from the memory text
+  const { cleanText, outcome } = parseConversationOutcome(content);
   const description = `Conversation with ${otherPlayer.name} at ${new Date(
     data.conversation._creationTime,
-  ).toLocaleString()}: ${content}`;
+  ).toLocaleString()}: ${cleanText}`;
   const importance = await calculateImportance(description);
   const { embedding } = await fetchEmbedding(description);
   authors.delete(player.id as GameId<'players'>);
@@ -82,7 +110,7 @@ export async function rememberConversation(
     embedding,
   });
   await reflectOnMemories(ctx, worldId, playerId);
-  return description;
+  return { description, outcome, messageCount: messages.length };
 }
 
 export const loadConversation = internalQuery({
@@ -112,7 +140,7 @@ export const loadConversation = internalQuery({
       .withIndex('worldId', (q) => q.eq('worldId', args.worldId).eq('id', args.conversationId))
       .first();
     if (!conversation) {
-      throw new Error(`Conversation ${args.conversationId} not found`);
+      return null;
     }
     const otherParticipator = await ctx.db
       .query('participatedTogether')

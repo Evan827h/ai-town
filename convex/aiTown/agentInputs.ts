@@ -62,7 +62,11 @@ export const agentInputs = {
         if (!invitee) {
           throw new Error(`Couldn't find player: ${inviteeId}`);
         }
-        Conversation.start(game, now, player, invitee);
+        // Start in-place conversation if either player is doing an activity
+        const eitherDoingActivity =
+          (player.activity && player.activity.until > now) ||
+          (invitee.activity && invitee.activity.until > now);
+        Conversation.start(game, now, player, invitee, !!eitherDoingActivity);
         agent.lastInviteAttempt = now;
       }
       if (args.destination) {

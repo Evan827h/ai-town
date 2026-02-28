@@ -21,6 +21,7 @@ export const Player = ({
   player,
   onClick,
   historicalTime,
+  bubbleMessage,
 }: {
   game: ServerGame;
   isViewer: boolean;
@@ -28,6 +29,7 @@ export const Player = ({
 
   onClick: SelectElement;
   historicalTime?: number;
+  bubbleMessage?: { text: string; authorName: string; timestamp: number };
 }) => {
   const playerCharacter = game.playerDescriptions.get(player.id)?.character;
   if (!playerCharacter) {
@@ -85,6 +87,8 @@ export const Player = ({
         onClick={() => {
           onClick({ kind: 'player', id: player.id });
         }}
+        bubbleText={bubbleMessage?.text}
+        bubbleTimestamp={bubbleMessage?.timestamp}
       />
     </>
   );

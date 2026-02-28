@@ -1,25 +1,29 @@
 import { ObjectType, v } from 'convex/values';
 import { GameId, parseGameId } from './ids';
 import { agentId, conversationId, playerId } from './ids';
-import { serializedPlayer } from './player';
+import { Player, serializedPlayer } from './player';
 import { Game } from './game';
 import {
   ACTION_TIMEOUT,
+  ACTIVITY_CONVERSATION_DISTANCE,
   AWKWARD_CONVERSATION_TIMEOUT,
   CONVERSATION_COOLDOWN,
   CONVERSATION_DISTANCE,
   INVITE_ACCEPT_PROBABILITY,
   INVITE_TIMEOUT,
+  MAX_ACTIVITY_CONVERSATION_MESSAGES,
   MAX_CONVERSATION_DURATION,
   MAX_CONVERSATION_MESSAGES,
   MESSAGE_COOLDOWN,
   MIDPOINT_THRESHOLD,
   PLAYER_CONVERSATION_COOLDOWN,
+  SLEEP_ACTION_IDS,
 } from '../constants';
 import { FunctionArgs } from 'convex/server';
 import { MutationCtx, internalMutation, internalQuery } from '../_generated/server';
 import { distance } from '../util/geometry';
 import { internal } from '../_generated/api';
+import { Conversation } from './conversation';
 import { movePlayer } from './movement';
 import { insertInput } from './insertInput';
 import { conversationPreferenceScore } from '../../src/psyche/relationships';
@@ -71,9 +75,38 @@ export class Agent {
     const recentlyAttemptedInvite =
       this.lastInviteAttempt && now < this.lastInviteAttempt + CONVERSATION_COOLDOWN;
     const doingActivity = player.activity && player.activity.until > now;
-    if (doingActivity && (conversation || player.pathfinding)) {
+    // Only force-end activities when pathfinding (agent chose to walk somewhere).
+    // Conversations no longer interrupt activities — agents can chat while eating, etc.
+    if (doingActivity && player.pathfinding) {
       player.activity!.until = now;
     }
+
+    // During an activity with no conversation, try to start an in-place chat with a nearby player
+    // But never initiate conversations while sleeping
+    if (doingActivity && !conversation && !this.inProgressOperation && !recentlyAttemptedInvite
+        && !isSleeping(player, now)) {
+      const nearbyFreePlayers = [...game.world.players.values()]
+        .filter((p) => p.id !== player.id)
+        .filter((p) => !p.activity || p.activity.until <= now || true) // include all nearby
+        .filter((p) => ![...game.world.conversations.values()].find((c) => c.participants.has(p.id)))
+        .filter((p) => !isSleeping(p, now))
+        .filter((p) => distance(player.position, p.position) < ACTIVITY_CONVERSATION_DISTANCE);
+
+      if (nearbyFreePlayers.length > 0) {
+        // Pick the closest candidate
+        nearbyFreePlayers.sort(
+          (a, b) => distance(player.position, a.position) - distance(player.position, b.position),
+        );
+        const invitee = nearbyFreePlayers[0];
+        console.log(
+          `[Psyche] Agent ${player.id}: starting in-place conversation with ${invitee.id} during activity`,
+        );
+        Conversation.start(game, now, player, invitee, /*inPlace=*/ true);
+        this.lastInviteAttempt = now;
+      }
+      return; // Activity continues — don't enter agentDoSomething
+    }
+
     // If we're not in a conversation, do something.
     // If we aren't doing an activity or moving, do something.
     // If we have been wandering but haven't thought about something to do for
@@ -87,6 +120,7 @@ export class Agent {
           .filter(
             (p) => ![...game.world.conversations.values()].find((c) => c.participants.has(p.id)),
           )
+          .filter((p) => !isSleeping(p, now))
           .map((p) => p.serialize()),
         agent: this.serialize(),
         map: game.worldMap.serialize(),
@@ -192,8 +226,13 @@ export class Agent {
           }
         }
         // See if the conversation has been going on too long and decide to leave.
+        // Use shorter message limit for activity conversations (agents chatting while eating, etc.)
+        const maxMessages = (player.activity && player.activity.until > now) ||
+          (otherPlayer.activity && otherPlayer.activity.until > now)
+          ? MAX_ACTIVITY_CONVERSATION_MESSAGES
+          : MAX_CONVERSATION_MESSAGES;
         const tooLongDeadline = started + MAX_CONVERSATION_DURATION;
-        if (tooLongDeadline < now || conversation.numMessages > MAX_CONVERSATION_MESSAGES) {
+        if (tooLongDeadline < now || conversation.numMessages > maxMessages) {
           console.log(`${player.id} leaving conversation with ${otherPlayer.id}.`);
           const messageUuid = crypto.randomUUID();
           conversation.setIsTyping(now, player, messageUuid);
@@ -335,6 +374,10 @@ export const agentSendMessage = internalMutation({
     });
   },
 });
+
+function isSleeping(p: Player, now: number): boolean {
+  return !!(p.activity && p.activity.until > now && SLEEP_ACTION_IDS.has(p.activity.actionId ?? ''));
+}
 
 export const findConversationCandidate = internalQuery({
   args: {
