@@ -22,6 +22,7 @@ const actionDefinitions: ActionDefinition[] = [
     duration: 30,
     replenishes: [{ needId: 'hunger', amount: 40 }],
     costs: [{ needId: 'energy', amount: 5 }],
+    emotionalEffects: { valence: 0.15, arousal: -0.1 },
   },
   {
     id: 'socialize_at_cafe',
@@ -36,6 +37,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [{ needId: 'hunger', amount: 5 }],
     socialWeights: { affinity: 0.5, trust: 0.2, frequency: 0.3 },
+    emotionalEffects: { valence: 0.2, arousal: 0.1 },
   },
   {
     id: 'people_watch',
@@ -50,6 +52,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [],
     socialWeights: { affinity: 0.3, frequency: 0.3, familiarity: 0.4 },
+    emotionalEffects: { valence: 0.05, arousal: -0.1 },
   },
 
   // === Home actions ===
@@ -65,6 +68,7 @@ const actionDefinitions: ActionDefinition[] = [
       { needId: 'comfort', amount: 20 },
     ],
     costs: [{ needId: 'social', amount: 5 }],
+    emotionalEffects: { valence: 0.1, arousal: -0.2 },
   },
   {
     id: 'nap',
@@ -75,6 +79,7 @@ const actionDefinitions: ActionDefinition[] = [
     duration: 20,
     replenishes: [{ needId: 'energy', amount: 25 }],
     costs: [],
+    emotionalEffects: { valence: 0.1, arousal: -0.2 },
   },
   {
     id: 'cook_at_home',
@@ -88,6 +93,7 @@ const actionDefinitions: ActionDefinition[] = [
       { needId: 'fun', amount: 10 },
     ],
     costs: [{ needId: 'energy', amount: 10 }],
+    emotionalEffects: { valence: 0.2, arousal: 0.05 },
   },
   {
     id: 'play_game',
@@ -98,6 +104,7 @@ const actionDefinitions: ActionDefinition[] = [
     duration: 30,
     replenishes: [{ needId: 'fun', amount: 30 }],
     costs: [{ needId: 'energy', amount: 5 }],
+    emotionalEffects: { valence: 0.15, arousal: 0.1 },
   },
 
   // === Park actions ===
@@ -116,6 +123,7 @@ const actionDefinitions: ActionDefinition[] = [
       { needId: 'energy', amount: 15 },
       { needId: 'hunger', amount: 10 },
     ],
+    emotionalEffects: { valence: 0.15, arousal: 0.2 },
   },
   {
     id: 'rest_on_bench',
@@ -129,6 +137,7 @@ const actionDefinitions: ActionDefinition[] = [
       { needId: 'comfort', amount: 15 },
     ],
     costs: [],
+    emotionalEffects: { valence: 0.1, arousal: -0.2 },
   },
   {
     id: 'read_at_park',
@@ -142,6 +151,7 @@ const actionDefinitions: ActionDefinition[] = [
       { needId: 'comfort', amount: 10 },
     ],
     costs: [],
+    emotionalEffects: { valence: 0.1, arousal: -0.15 },
   },
 
   // === Morally-weighted actions ===
@@ -161,6 +171,7 @@ const actionDefinitions: ActionDefinition[] = [
     costs: [{ needId: 'energy', amount: 3 }],
     socialWeights: { affinity: 0.6, frequency: 0.4 },
     moralCosts: [{ moralValueId: 'honesty', severity: 0.6 }],
+    emotionalEffects: { valence: 0.1, arousal: 0.15 },
   },
   {
     id: 'eavesdrop',
@@ -178,6 +189,7 @@ const actionDefinitions: ActionDefinition[] = [
       { moralValueId: 'fairness', severity: 0.5 },
       { moralValueId: 'liberty', severity: 0.4 },
     ],
+    emotionalEffects: { valence: -0.05, arousal: 0.15 },
   },
   {
     id: 'skip_plans',
@@ -189,6 +201,7 @@ const actionDefinitions: ActionDefinition[] = [
     replenishes: [{ needId: 'comfort', amount: 15 }],
     costs: [],
     moralCosts: [{ moralValueId: 'loyalty', severity: 0.7 }],
+    emotionalEffects: { valence: -0.1, arousal: -0.1 },
   },
 
   // === Universal actions ===
@@ -201,6 +214,7 @@ const actionDefinitions: ActionDefinition[] = [
     replenishes: [{ needId: 'social', amount: 25 }],
     costs: [{ needId: 'energy', amount: 5 }],
     socialWeights: { affinity: 0.4, frequency: 0.4, trust: 0.2 },
+    emotionalEffects: { valence: 0.15, arousal: 0.1 },
   },
   {
     id: 'wander',
@@ -210,6 +224,7 @@ const actionDefinitions: ActionDefinition[] = [
     duration: 15,
     replenishes: [{ needId: 'fun', amount: 5 }],
     costs: [{ needId: 'energy', amount: 3 }],
+    emotionalEffects: { valence: 0.0, arousal: -0.05 },
   },
 ];
 

@@ -53,6 +53,8 @@ export interface ActionDefinition {
   /** Which relationship dimensions matter for this action (weights sum to ~1.0) */
   socialWeights?: SocialWeights;
   moralCosts?: MoralTag[];
+  /** Emotional shift when this action completes: { valence, arousal } deltas */
+  emotionalEffects?: { valence: number; arousal: number };
 }
 
 export interface ScoredAction {
@@ -153,6 +155,30 @@ export interface OpinionDelta {
   topicId: string;
   /** Positive = more favorable, negative = less favorable */
   delta: number;
+}
+
+// ─── Emotional Contagion Types ───────────────────────────────
+
+export interface EmotionalState {
+  /** -1 (miserable) to +1 (joyful) */
+  valence: number;
+  /** -1 (lethargic) to +1 (agitated) */
+  arousal: number;
+  lastUpdated: number;
+}
+
+export interface EmotionalProfile {
+  baseline: { valence: number; arousal: number };
+  /** 0..1 — how susceptible to others' emotions */
+  receptivity: number;
+  /** 0..1 — how strongly emotions radiate to others */
+  charisma: number;
+}
+
+export interface EmotionAnchor {
+  label: string;
+  valence: number;
+  arousal: number;
 }
 
 // Registry containers — simple Maps, not database rows
