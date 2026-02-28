@@ -238,6 +238,88 @@ export const agentGenerateMessage = internalAction({
   },
 });
 
+/**
+ * Run the psyche scorer to determine the best next action.
+ * Used by both agentDoSomething (normal decisions) and agentGenerateMessage (pre-leave scoring).
+ *
+ * @param predictedNeeds - If provided, use these instead of fetching/depleting from DB.
+ *                         Used for pre-leave scoring where we predict post-conversation needs.
+ * @returns The top scored action and the needs used for scoring, or null if no actions available.
+ */
+async function scoreNextAction(
+  ctx: any,
+  worldId: any,
+  agentId: string,
+  playerId: string,
+  playerPosition: { x: number; y: number },
+  nearbyPlayerIds: string[],
+  predictedNeeds?: AgentNeedState[],
+): Promise<{ scored: ReturnType<typeof scoreActions>; needs: AgentNeedState[]; location: string } | null> {
+  let agentNeeds: AgentNeedState[];
+
+  if (predictedNeeds) {
+    agentNeeds = predictedNeeds;
+  } else {
+    const needDocs = await ctx.runQuery(internal.psyche.functions.getAgentNeedsInternal, {
+      worldId,
+      agentId,
+    });
+    if (needDocs.length === 0) return null;
+
+    agentNeeds = needDocs.map(
+      (d: { needId: string; currentValue: number; lastUpdated: number }) => ({
+        needId: d.needId,
+        currentValue: d.currentValue,
+        lastUpdated: d.lastUpdated,
+      }),
+    );
+
+    // Deplete needs for elapsed time
+    const now = Date.now();
+    const lastUpdated = Math.min(...agentNeeds.map((n) => n.lastUpdated));
+    const elapsedMs = Math.max(0, now - lastUpdated);
+    const elapsedGameMinutes = realMsToGameMinutes(elapsedMs);
+    if (elapsedGameMinutes > 0) {
+      agentNeeds = depleteNeeds(agentNeeds, elapsedGameMinutes, needRegistry, now);
+    }
+  }
+
+  const location = getLocationAtPosition(playerPosition);
+
+  // Gather all actions from all locations
+  const allActions = getActionsForLocation('*');
+  const cafeActions = getActionsForLocation('cafe');
+  const homeActions = getActionsForLocation('home');
+  const parkActions = getActionsForLocation('park');
+  const actionSet = new Map(
+    [...cafeActions, ...homeActions, ...parkActions, ...allActions].map((a) => [a.id, a]),
+  );
+  const allAvailableActions = [...actionSet.values()];
+
+  const baseScored = scoreActions(agentNeeds, allAvailableActions, needRegistry);
+
+  // Apply relationship modifiers
+  const relDocs = await ctx.runQuery(internal.psyche.functions.getRelationshipsForAgent, {
+    worldId,
+    agentId: playerId, // relationships keyed by player ID
+  });
+  const relationships: RelationshipEdge[] = relDocs.map((d: any) => ({
+    fromAgentId: d.fromAgentId,
+    toAgentId: d.toAgentId,
+    trust: d.trust,
+    affinity: d.affinity,
+    respect: d.respect,
+    frequency: d.frequency,
+    familiarity: d.familiarity,
+    lastInteraction: d.lastInteraction,
+  }));
+  const scored = applyRelationshipModifiers(baseScored, relationships, nearbyPlayerIds);
+
+  if (scored.length === 0) return null;
+
+  return { scored, needs: agentNeeds, location };
+}
+
 export const agentDoSomething = internalAction({
   args: {
     worldId: v.id('worlds'),
@@ -441,38 +523,18 @@ export const agentDoSomething = internalAction({
       });
     }
 
-    // Step 4: Score all actions (including those at other locations)
-    const allActions = getActionsForLocation('*');
-    const cafeActions = getActionsForLocation('cafe');
-    const homeActions = getActionsForLocation('home');
-    const parkActions = getActionsForLocation('park');
-
-    const actionSet = new Map(
-      [...cafeActions, ...homeActions, ...parkActions, ...allActions].map((a) => [a.id, a]),
+    // Step 4: Score all actions (delegated to helper)
+    const result = await scoreNextAction(
+      ctx,
+      args.worldId,
+      agent.id,
+      player.id,
+      player.position,
+      args.otherFreePlayers.map((p) => p.id),
+      agentNeeds, // pass already-depleted needs
     );
-    const allAvailableActions = [...actionSet.values()];
 
-    const baseScored = scoreActions(agentNeeds, allAvailableActions, needRegistry);
-
-    // Apply relationship modifiers to social action scores
-    const nearbyPlayerIds = args.otherFreePlayers.map((p) => p.id);
-    const relDocs = await ctx.runQuery(internal.psyche.functions.getRelationshipsForAgent, {
-      worldId: args.worldId,
-      agentId: player.id, // relationships keyed by player ID
-    });
-    const relationships: RelationshipEdge[] = relDocs.map((d: any) => ({
-      fromAgentId: d.fromAgentId,
-      toAgentId: d.toAgentId,
-      trust: d.trust,
-      affinity: d.affinity,
-      respect: d.respect,
-      frequency: d.frequency,
-      familiarity: d.familiarity,
-      lastInteraction: d.lastInteraction,
-    }));
-    const scored = applyRelationshipModifiers(baseScored, relationships, nearbyPlayerIds);
-
-    if (scored.length === 0) {
+    if (!result) {
       await sleep(Math.random() * 1000);
       await ctx.runMutation(api.aiTown.main.sendInput, {
         worldId: args.worldId,
@@ -486,6 +548,7 @@ export const agentDoSomething = internalAction({
       return;
     }
 
+    const { scored } = result;
     const bestAction = scored[0];
     const actionLocation = bestAction.action.locationRequirement;
 
