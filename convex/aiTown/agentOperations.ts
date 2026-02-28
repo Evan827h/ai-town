@@ -300,7 +300,7 @@ export const agentGenerateMessage = internalAction({
         args.otherPlayerId as GameId<'players'>,
         nextPlan,
       );
-    } else {
+    } else if (args.type === 'start' || args.type === 'continue') {
       // Start or continue — unchanged
       const completionFn = args.type === 'start' ? startConversationMessage : continueConversationMessage;
       text = await completionFn(
@@ -310,6 +310,9 @@ export const agentGenerateMessage = internalAction({
         args.playerId as GameId<'players'>,
         args.otherPlayerId as GameId<'players'>,
       );
+    } else {
+      const _exhaustive: never = args.type;
+      throw new Error(`Unexpected message type: ${args.type}`);
     }
 
     await ctx.runMutation(internal.aiTown.agent.agentSendMessage, {
