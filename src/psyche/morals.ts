@@ -55,7 +55,7 @@ export function applyMoralFilter(
       }
 
       totalPenalty += effectiveSeverity;
-      if (effectiveSeverity > 0.1) {
+      if (effectiveSeverity > 0) {
         violatedValues.push(cost.moralValueId);
       }
     }

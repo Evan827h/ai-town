@@ -145,6 +145,33 @@ describe('applyMoralFilter', () => {
       expect(conflicts[0].penalty).toBeCloseTo(0.45, 2);
       expect(conflicts[0].values).toEqual(['honesty']);
     });
+
+    test('conflict values includes all contributing costs even if each is small', () => {
+      // strictProfile has a very low conflictThreshold (0.05) so that the sum of two small
+      // effectiveSeverities triggers a conflict even though each individual value is well
+      // below the old 0.1 cutoff that was previously used to gate violatedValues.
+      //
+      // honesty:  0.5 × 0.07 = 0.035
+      // loyalty:  0.5 × 0.05 = 0.025
+      // total:    0.06  > conflictThreshold 0.05  → conflict
+      // both effectiveSeverities (0.035, 0.025) are below the old 0.1 threshold,
+      // so with the old code `values` would be [] — the bug.
+      const strictProfile = {
+        weights: { honesty: 0.5, loyalty: 0.5 },
+        hardVetoThreshold: 0.9,
+        conflictThreshold: 0.05,
+      };
+      const actions = [
+        makeAction('act', 100, [
+          { moralValueId: 'honesty', severity: 0.07 },
+          { moralValueId: 'loyalty', severity: 0.05 },
+        ]),
+      ];
+      const { conflicts } = applyMoralFilter(actions, strictProfile);
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0].values).toContain('honesty');
+      expect(conflicts[0].values).toContain('loyalty');
+    });
   });
 
   describe('output ordering', () => {
