@@ -134,6 +134,27 @@ export interface MoralTag {
   severity: number;
 }
 
+// ─── Opinion Tracking Types ──────────────────────────────────
+
+export interface OpinionTopic {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface AgentOpinion {
+  topicId: string;
+  /** 0 = strongly opposed, 5 = neutral, 10 = strongly supportive */
+  value: number;
+  lastUpdated: number;
+}
+
+export interface OpinionDelta {
+  topicId: string;
+  /** Positive = more favorable, negative = less favorable */
+  delta: number;
+}
+
 // Registry containers — simple Maps, not database rows
 export type NeedRegistry = Map<string, NeedDefinition>;
 export type ActionRegistry = Map<string, ActionDefinition>;
