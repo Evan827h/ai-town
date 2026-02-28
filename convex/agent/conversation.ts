@@ -8,6 +8,8 @@ import * as embeddingsCache from './embeddingsCache';
 import { GameId, conversationId, playerId } from '../aiTown/ids';
 import { NUM_MEMORIES_TO_SEARCH } from '../constants';
 import { getLocationAtPosition } from '../../src/psyche/data/locations';
+import { getOpinionContext } from '../../src/psyche/opinions';
+import { AgentOpinion } from '../../src/psyche/registries';
 
 const selfInternal = internal.agent.conversation;
 
@@ -18,7 +20,7 @@ export async function startConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, agent, otherAgent, lastConversation, recentDecisions } = await ctx.runQuery(
+  const { player, otherPlayer, agent, otherAgent, lastConversation, recentDecisions, opinions } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -47,6 +49,7 @@ export async function startConversationMessage(
   ];
   prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
   prompt.push(...currentActivityPrompt(player, recentDecisions));
+  prompt.push(...opinionPrompt(opinions));
   prompt.push(...previousConversationPrompt(otherPlayer, lastConversation));
   prompt.push(...relatedMemoriesPrompt(memories));
   if (memoryWithOtherPlayer) {
@@ -87,7 +90,7 @@ export async function continueConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, conversation, agent, otherAgent, recentDecisions } = await ctx.runQuery(
+  const { player, otherPlayer, conversation, agent, otherAgent, recentDecisions, opinions } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -109,6 +112,7 @@ export async function continueConversationMessage(
   ];
   prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
   prompt.push(...currentActivityPrompt(player, recentDecisions));
+  prompt.push(...opinionPrompt(opinions));
   prompt.push(...relatedMemoriesPrompt(memories));
   prompt.push(
     `Below is the current chat history between you and ${otherPlayer.name}.`,
@@ -147,7 +151,7 @@ export async function leaveConversationMessage(
   otherPlayerId: GameId<'players'>,
   nextPlan?: string,
 ): Promise<string> {
-  const { player, otherPlayer, conversation, agent, otherAgent, recentDecisions } = await ctx.runQuery(
+  const { player, otherPlayer, conversation, agent, otherAgent, recentDecisions, opinions } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -162,6 +166,7 @@ export async function leaveConversationMessage(
   ];
   prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
   prompt.push(...currentActivityPrompt(player, recentDecisions));
+  prompt.push(...opinionPrompt(opinions));
   if (nextPlan) {
     prompt.push(`After this conversation, your plan is: ${nextPlan}`);
     prompt.push(`Mention what you're going to do next when saying goodbye.`);
@@ -266,6 +271,20 @@ function currentActivityPrompt(
   }
 
   return prompt;
+}
+
+function opinionPrompt(
+  opinionDocs: Array<{ topicId: string; value: number; lastUpdated: number }>,
+): string[] {
+  if (!opinionDocs || opinionDocs.length === 0) return [];
+  const opinions: AgentOpinion[] = opinionDocs.map((d) => ({
+    topicId: d.topicId,
+    value: d.value,
+    lastUpdated: d.lastUpdated,
+  }));
+  const context = getOpinionContext(opinions);
+  if (context.length === 0) return [];
+  return ['Your personal attitudes:', ...context];
 }
 
 async function previousMessages(
@@ -377,6 +396,10 @@ export const queryPromptData = internalQuery({
       .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', agent.id))
       .order('desc')
       .take(3);
+    const opinions = await ctx.db
+      .query('agentOpinions')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.playerId))
+      .collect();
     return {
       player: { name: playerDescription.name, ...player },
       otherPlayer: { name: otherPlayerDescription.name, ...otherPlayer },
@@ -389,6 +412,7 @@ export const queryPromptData = internalQuery({
       },
       lastConversation,
       recentDecisions,
+      opinions,
     };
   },
 });

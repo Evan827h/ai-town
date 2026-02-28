@@ -83,6 +83,17 @@ export const psycheTables = {
     criticalNeedsAtDecision: v.array(v.string()),
   }).index('by_agent', ['worldId', 'agentId']),
 
+  // Per-agent opinion values on abstract topics (0–10)
+  agentOpinions: defineTable({
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+    topicId: v.string(),
+    value: v.float64(),
+    lastUpdated: v.float64(),
+  })
+    .index('by_agent', ['worldId', 'agentId'])
+    .index('by_agent_topic', ['worldId', 'agentId', 'topicId']),
+
   // Directed relationship edges between agents
   agentRelationships: defineTable({
     worldId: v.id('worlds'),

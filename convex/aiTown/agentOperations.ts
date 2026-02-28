@@ -21,7 +21,7 @@ import { depleteNeeds, applyActionEffects, initializeNeeds } from '../../src/psy
 import { needRegistry } from '../../src/psyche/data/needs';
 import { getActionsForLocation } from '../../src/psyche/data/actions';
 import { getLocationAtPosition, getLocationDestination } from '../../src/psyche/data/locations';
-import { ActionEffect, AgentNeedState, RelationshipEdge } from '../../src/psyche/registries';
+import { ActionEffect, AgentNeedState, AgentOpinion, RelationshipEdge } from '../../src/psyche/registries';
 import {
   applyRelationshipModifiers,
   initializeRelationship,
@@ -30,6 +30,8 @@ import {
 import { CHARACTER_DISPOSITIONS, DEFAULT_DISPOSITION } from '../../src/psyche/data/relationships';
 import { applyMoralFilter, MoralConflict } from '../../src/psyche/morals';
 import { MORAL_PROFILES, DEFAULT_MORAL_PROFILE } from '../../src/psyche/data/morals';
+import { applyOpinionDeltas } from '../../src/psyche/opinions';
+import { CHARACTER_OPINIONS, DEFAULT_OPINIONS, OUTCOME_OPINION_DELTAS } from '../../src/psyche/data/opinions';
 
 /** Need effects applied when a conversation ends */
 const CONVERSATION_NEED_REPLENISHES: ActionEffect[] = [
@@ -177,6 +179,61 @@ export const agentRememberConversation = internalAction({
 
         console.log(
           `[Psyche] ${myName} (${args.playerId}): conversation needs updated — social +20, fun +8, energy -3`,
+        );
+      }
+
+      // ─── Update opinions after conversation ────────────────
+      const opinionDeltas = OUTCOME_OPINION_DELTAS[outcome];
+      if (opinionDeltas.length > 0) {
+        const opinionDocs = await ctx.runQuery(internal.psyche.functions.getAgentOpinionsInternal, {
+          worldId: args.worldId,
+          agentId: args.playerId,
+        });
+
+        let opinions: AgentOpinion[];
+        if (opinionDocs.length > 0) {
+          opinions = opinionDocs.map(
+            (d: { topicId: string; value: number; lastUpdated: number }) => ({
+              topicId: d.topicId,
+              value: d.value,
+              lastUpdated: d.lastUpdated,
+            }),
+          );
+        } else {
+          // Lazy-initialize from character defaults
+          const defaults = CHARACTER_OPINIONS[myName] ?? DEFAULT_OPINIONS;
+          opinions = Object.entries(defaults).map(([topicId, value]) => ({
+            topicId,
+            value,
+            lastUpdated: now,
+          }));
+          await ctx.runMutation(internal.psyche.functions.initializeAgentOpinions, {
+            worldId: args.worldId,
+            agentId: args.playerId,
+            opinions: opinions.map((o) => ({
+              topicId: o.topicId,
+              value: o.value,
+              lastUpdated: o.lastUpdated,
+            })),
+          });
+        }
+
+        const updatedOpinions = applyOpinionDeltas(opinions, opinionDeltas, now);
+        await ctx.runMutation(internal.psyche.functions.updateAgentOpinions, {
+          worldId: args.worldId,
+          agentId: args.playerId,
+          opinions: updatedOpinions.map((o) => ({
+            topicId: o.topicId,
+            value: o.value,
+            lastUpdated: o.lastUpdated,
+          })),
+        });
+
+        const deltaStr = opinionDeltas
+          .map((d) => `${d.topicId} ${d.delta > 0 ? '+' : ''}${d.delta}`)
+          .join(', ');
+        console.log(
+          `[Psyche] ${myName}: opinions updated — ${outcome} → ${deltaStr}`,
         );
       }
     }

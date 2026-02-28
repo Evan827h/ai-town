@@ -175,6 +175,105 @@ export const clearAgentIntent = internalMutation({
   },
 });
 
+// ─── Opinion functions ───────────────────────────────────────
+
+/** Get all opinions for an agent (public — for debug UI) */
+export const getAgentOpinions = query({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentOpinions')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .collect();
+  },
+});
+
+/** Get all opinions for an agent (internal — for agent loop + conversation prompts) */
+export const getAgentOpinionsInternal = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentOpinions')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .collect();
+  },
+});
+
+/** Initialize opinions for a new agent — bulk insert */
+export const initializeAgentOpinions = internalMutation({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+    opinions: v.array(
+      v.object({
+        topicId: v.string(),
+        value: v.float64(),
+        lastUpdated: v.float64(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    for (const opinion of args.opinions) {
+      await ctx.db.insert('agentOpinions', {
+        worldId: args.worldId,
+        agentId: args.agentId,
+        topicId: opinion.topicId,
+        value: opinion.value,
+        lastUpdated: opinion.lastUpdated,
+      });
+    }
+  },
+});
+
+/** Update opinion values — upsert per topic */
+export const updateAgentOpinions = internalMutation({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+    opinions: v.array(
+      v.object({
+        topicId: v.string(),
+        value: v.float64(),
+        lastUpdated: v.float64(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    for (const opinion of args.opinions) {
+      const existing = await ctx.db
+        .query('agentOpinions')
+        .withIndex('by_agent_topic', (q) =>
+          q
+            .eq('worldId', args.worldId)
+            .eq('agentId', args.agentId)
+            .eq('topicId', opinion.topicId),
+        )
+        .unique();
+
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          value: opinion.value,
+          lastUpdated: opinion.lastUpdated,
+        });
+      } else {
+        await ctx.db.insert('agentOpinions', {
+          worldId: args.worldId,
+          agentId: args.agentId,
+          topicId: opinion.topicId,
+          value: opinion.value,
+          lastUpdated: opinion.lastUpdated,
+        });
+      }
+    }
+  },
+});
+
 // ─── Relationship functions ──────────────────────────────────
 
 /** Get all relationships for an agent (internal — used by agent loop) */
