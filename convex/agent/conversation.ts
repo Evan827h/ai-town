@@ -145,6 +145,7 @@ export async function leaveConversationMessage(
   conversationId: GameId<'conversations'>,
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
+  nextPlan?: string,
 ): Promise<string> {
   const { player, otherPlayer, conversation, agent, otherAgent, recentDecisions } = await ctx.runQuery(
     selfInternal.queryPromptData,
@@ -157,10 +158,14 @@ export async function leaveConversationMessage(
   );
   const prompt = [
     `You are ${player.name}, and you're currently in a conversation with ${otherPlayer.name}.`,
-    `You've decided to leave the question and would like to politely tell them you're leaving the conversation.`,
+    `You've decided to leave the conversation and would like to politely tell them you're leaving the conversation.`,
   ];
   prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
   prompt.push(...currentActivityPrompt(player, recentDecisions));
+  if (nextPlan) {
+    prompt.push(`After this conversation, your plan is: ${nextPlan}`);
+    prompt.push(`Mention what you're going to do next when saying goodbye.`);
+  }
   prompt.push(
     `Below is the current chat history between you and ${otherPlayer.name}.`,
     `How would you like to tell them that you're leaving? Your response should be brief and within 200 characters.`,
