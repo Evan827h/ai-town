@@ -28,6 +28,8 @@ import {
   updateRelationship,
 } from '../../src/psyche/relationships';
 import { CHARACTER_DISPOSITIONS, DEFAULT_DISPOSITION } from '../../src/psyche/data/relationships';
+import { applyMoralFilter, MoralConflict } from '../../src/psyche/morals';
+import { MORAL_PROFILES, DEFAULT_MORAL_PROFILE } from '../../src/psyche/data/morals';
 
 /** Need effects applied when a conversation ends */
 const CONVERSATION_NEED_REPLENISHES: ActionEffect[] = [
@@ -345,7 +347,7 @@ async function scoreNextAction(
   playerPosition: { x: number; y: number },
   nearbyPlayerIds: string[],
   predictedNeeds?: AgentNeedState[],
-): Promise<{ scored: ReturnType<typeof scoreActions>; needs: AgentNeedState[]; location: string } | null> {
+): Promise<{ scored: ReturnType<typeof scoreActions>; needs: AgentNeedState[]; location: string; conflicts: MoralConflict[] } | null> {
   let agentNeeds: AgentNeedState[];
 
   if (predictedNeeds) {
@@ -404,11 +406,25 @@ async function scoreNextAction(
     familiarity: d.familiarity,
     lastInteraction: d.lastInteraction,
   }));
-  const scored = applyRelationshipModifiers(baseScored, relationships, nearbyPlayerIds);
+  const relScored = applyRelationshipModifiers(baseScored, relationships, nearbyPlayerIds);
+
+  // Look up the character's name to select their moral profile
+  const characterName = await ctx.runQuery(internal.psyche.functions.getPlayerName, {
+    worldId,
+    playerId,
+  });
+  const moralProfile = MORAL_PROFILES[characterName ?? ''] ?? DEFAULT_MORAL_PROFILE;
+  const { actions: scored, conflicts } = applyMoralFilter(relScored, moralProfile);
+
+  if (conflicts.length > 0) {
+    console.log(
+      `[Psyche] Agent ${agentId}: moral conflict — ${conflicts.map((c) => `${c.actionId} (${c.values.join(', ')})`).join('; ')}`,
+    );
+  }
 
   if (scored.length === 0) return null;
 
-  return { scored, needs: agentNeeds, location };
+  return { scored, needs: agentNeeds, location, conflicts };
 }
 
 export const agentDoSomething = internalAction({

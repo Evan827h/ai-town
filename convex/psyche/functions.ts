@@ -326,6 +326,23 @@ export const getAgentRelationships = query({
   },
 });
 
+/** Look up a player's character name by player ID (for moral profile selection) */
+export const getPlayerName = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    playerId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const desc = await ctx.db
+      .query('playerDescriptions')
+      .withIndex('worldId', (q) =>
+        q.eq('worldId', args.worldId).eq('playerId', args.playerId),
+      )
+      .first();
+    return desc?.name ?? null;
+  },
+});
+
 /** Find the other participant in a conversation and both player names (for relationship init) */
 export const getConversationParticipants = internalQuery({
   args: {
