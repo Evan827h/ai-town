@@ -280,6 +280,7 @@ function DecisionEntry({
     chosenActionName: string;
     chosenScore: number;
     location: string;
+    conflicts?: Array<{ actionId: string; penalty: number; values: string[] }>;
     alternatives: {
       actionEmoji: string;
       actionName: string;
@@ -320,6 +321,21 @@ function DecisionEntry({
         <span>score: {entry.chosenScore.toFixed(1)}</span>
         <span>@ {entry.location}</span>
       </div>
+
+      {/* Moral conflict badges */}
+      {entry.conflicts && entry.conflicts.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {entry.conflicts.map((conflict) => (
+            <span
+              key={conflict.actionId}
+              className="inline-flex items-center gap-1 rounded bg-yellow-900/40 px-1.5 py-0.5 text-xs text-yellow-300"
+              title={`Moral conflict: ${conflict.values.join(', ')} (penalty: ${conflict.penalty.toFixed(2)})`}
+            >
+              ⚠️ {conflict.values.join(', ')}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Critical needs flag */}
       {criticalNeeds.length > 0 && (
