@@ -410,8 +410,29 @@ export const logDecision = internalMutation({
       }),
     ),
     location: v.string(),
+    conflicts: v.optional(
+      v.array(
+        v.object({
+          actionId: v.string(),
+          penalty: v.number(),
+          values: v.array(v.string()),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert('psycheDecisionLog', args);
+    await ctx.db.insert('psycheDecisionLog', {
+      worldId: args.worldId,
+      agentId: args.agentId,
+      timestamp: args.timestamp,
+      chosenActionId: args.chosenActionId,
+      chosenActionName: args.chosenActionName,
+      chosenActionEmoji: args.chosenActionEmoji,
+      chosenScore: args.chosenScore,
+      alternatives: args.alternatives,
+      needsSnapshot: args.needsSnapshot,
+      location: args.location,
+      conflicts: args.conflicts,
+    });
   },
 });

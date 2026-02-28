@@ -44,6 +44,15 @@ export const psycheTables = {
     ),
     // Which location the agent was at
     location: v.string(),
+    conflicts: v.optional(
+      v.array(
+        v.object({
+          actionId: v.string(),
+          penalty: v.number(),
+          values: v.array(v.string()),
+        }),
+      ),
+    ),
   }).index('by_agent', ['worldId', 'agentId']),
 
   // Travel commitment — stores the intended action when agent walks to a location.

@@ -704,7 +704,7 @@ export const agentDoSomething = internalAction({
           })),
         });
 
-        await logPsycheDecision(ctx, args.worldId, agent.id, now, scored, agentNeeds, location);
+        await logPsycheDecision(ctx, args.worldId, agent.id, now, scored, agentNeeds, location, result.conflicts);
 
         await sleep(Math.random() * 1000);
         await ctx.runMutation(api.aiTown.main.sendInput, {
@@ -744,7 +744,7 @@ export const agentDoSomething = internalAction({
       })),
     });
 
-    await logPsycheDecision(ctx, args.worldId, agent.id, now, scored, updatedNeeds, location);
+    await logPsycheDecision(ctx, args.worldId, agent.id, now, scored, updatedNeeds, location, result.conflicts);
 
     // Start the activity
     await sleep(Math.random() * 1000);
@@ -774,6 +774,7 @@ async function logPsycheDecision(
   scored: { action: { id: string; name: string; emoji: string }; score: number }[],
   needs: AgentNeedState[],
   location: string,
+  conflicts?: MoralConflict[],
 ) {
   const best = scored[0];
   const alternatives = scored.slice(1, 6).map((s) => ({
@@ -810,6 +811,11 @@ async function logPsycheDecision(
     alternatives,
     needsSnapshot,
     location,
+    conflicts: conflicts?.map((c) => ({
+      actionId: c.actionId,
+      penalty: c.penalty,
+      values: c.values,
+    })),
   });
 }
 
