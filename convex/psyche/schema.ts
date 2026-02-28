@@ -94,6 +94,15 @@ export const psycheTables = {
     .index('by_agent', ['worldId', 'agentId'])
     .index('by_agent_topic', ['worldId', 'agentId', 'topicId']),
 
+  // Per-agent emotional state (circumplex: valence + arousal)
+  agentEmotions: defineTable({
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+    valence: v.float64(), // -1..1
+    arousal: v.float64(), // -1..1
+    lastUpdated: v.float64(), // game-time timestamp
+  }).index('by_agent', ['worldId', 'agentId']),
+
   // Directed relationship edges between agents
   agentRelationships: defineTable({
     worldId: v.id('worlds'),

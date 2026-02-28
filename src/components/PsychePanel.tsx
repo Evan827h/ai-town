@@ -9,6 +9,8 @@ import { ServerGame } from '../hooks/serverGame';
 // Need definitions for display (colors, thresholds)
 import { needRegistry } from '../psyche/data/needs';
 import { OPINION_TOPICS, OPINION_NEUTRAL } from '../psyche/data/opinions';
+import { getEmotionLabel } from '../psyche/emotions';
+import { NEUTRAL_THRESHOLD } from '../psyche/data/emotions';
 
 type MemoryFilter = 'all' | 'conversation' | 'reflection' | 'relationship';
 
@@ -43,6 +45,12 @@ export default function PsychePanel({
 
   // Opinions query also keyed by player ID
   const opinions = useQuery(api.psyche.functions.getAgentOpinions, {
+    worldId,
+    agentId: playerId as string,
+  });
+
+  // Emotion query (keyed by player ID)
+  const emotion = useQuery(api.psyche.functions.getAgentEmotion, {
     worldId,
     agentId: playerId as string,
   });
@@ -119,6 +127,20 @@ export default function PsychePanel({
             })
         ) : (
           <div className="text-sm text-brown-300 text-center py-2">No opinions yet...</div>
+        )}
+      </div>
+
+      {/* ─── Emotion Section ─── */}
+      <div className="box mt-4">
+        <h2 className="bg-brown-700 p-2 font-display text-lg tracking-wider shadow-solid text-center">
+          Emotion
+        </h2>
+      </div>
+      <div className="mt-2">
+        {emotion ? (
+          <EmotionIndicator valence={emotion.valence} arousal={emotion.arousal} />
+        ) : (
+          <div className="text-sm text-brown-300 text-center py-2">No emotional state yet...</div>
         )}
       </div>
 
@@ -336,6 +358,70 @@ function OpinionBar({ name, value }: { name: string; value: number }) {
           className={`absolute top-0 h-full rounded-sm transition-all duration-500 ${barColor}`}
           style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
         />
+      </div>
+    </div>
+  );
+}
+
+// ─── Emotion Indicator Component (2D circumplex dot plot) ────
+
+function EmotionIndicator({ valence, arousal }: { valence: number; arousal: number }) {
+  const { label, intensity } = getEmotionLabel({ valence, arousal, lastUpdated: 0 });
+
+  // Map valence/arousal (-1..1) to percentage position (0..100)
+  const dotX = ((valence + 1) / 2) * 100;
+  const dotY = ((1 - arousal) / 2) * 100; // invert Y: high arousal = top
+
+  // Dot color based on valence
+  const dotColor =
+    intensity < NEUTRAL_THRESHOLD
+      ? 'bg-gray-400'
+      : valence > 0
+        ? 'bg-green-400'
+        : 'bg-red-400';
+
+  // Intensity descriptor
+  let intensityLabel = '';
+  if (intensity < NEUTRAL_THRESHOLD) {
+    intensityLabel = 'neutral';
+  } else if (intensity > 0.7) {
+    intensityLabel = `very ${label}`;
+  } else if (intensity < 0.4) {
+    intensityLabel = `slightly ${label}`;
+  } else {
+    intensityLabel = label;
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      {/* 2D plot */}
+      <div className="relative w-28 h-28 bg-brown-900 rounded border border-brown-700">
+        {/* Crosshairs */}
+        <div className="absolute top-0 left-1/2 h-full border-l border-brown-700" />
+        <div className="absolute left-0 top-1/2 w-full border-t border-brown-700" />
+
+        {/* Quadrant labels */}
+        <span className="absolute top-0.5 left-1 text-brown-600 text-[8px]">stressed</span>
+        <span className="absolute top-0.5 right-1 text-brown-600 text-[8px]">excited</span>
+        <span className="absolute bottom-0.5 left-1 text-brown-600 text-[8px]">sad</span>
+        <span className="absolute bottom-0.5 right-1 text-brown-600 text-[8px]">calm</span>
+
+        {/* Dot */}
+        <div
+          className={`absolute w-3 h-3 rounded-full ${dotColor} shadow-[0_0_6px_rgba(255,255,255,0.3)] transition-all duration-700`}
+          style={{
+            left: `calc(${dotX}% - 6px)`,
+            top: `calc(${dotY}% - 6px)`,
+          }}
+        />
+      </div>
+
+      {/* Label below */}
+      <div className="text-xs text-brown-200 text-center">
+        {intensityLabel}
+        <span className="text-brown-500 ml-1.5">
+          v:{valence >= 0 ? '+' : ''}{valence.toFixed(2)} a:{arousal >= 0 ? '+' : ''}{arousal.toFixed(2)}
+        </span>
       </div>
     </div>
   );

@@ -21,7 +21,7 @@ import { depleteNeeds, applyActionEffects, initializeNeeds } from '../../src/psy
 import { needRegistry } from '../../src/psyche/data/needs';
 import { getActionsForLocation } from '../../src/psyche/data/actions';
 import { getLocationAtPosition, getLocationDestination } from '../../src/psyche/data/locations';
-import { ActionEffect, AgentNeedState, AgentOpinion, RelationshipEdge } from '../../src/psyche/registries';
+import { ActionEffect, AgentNeedState, AgentOpinion, EmotionalState, RelationshipEdge } from '../../src/psyche/registries';
 import {
   applyRelationshipModifiers,
   initializeRelationship,
@@ -32,6 +32,20 @@ import { applyMoralFilter, MoralConflict } from '../../src/psyche/morals';
 import { MORAL_PROFILES, DEFAULT_MORAL_PROFILE } from '../../src/psyche/data/morals';
 import { applyOpinionDeltas } from '../../src/psyche/opinions';
 import { CHARACTER_OPINIONS, DEFAULT_OPINIONS, OUTCOME_OPINION_DELTAS } from '../../src/psyche/data/opinions';
+import {
+  decayEmotion,
+  transferEmotion,
+  applyEmotionDelta,
+  relationshipToCloseness,
+  initializeEmotion,
+} from '../../src/psyche/emotions';
+import {
+  CHARACTER_EMOTIONS,
+  DEFAULT_EMOTIONAL_PROFILE,
+  CONTAGION_MAX_DISTANCE,
+  OUTCOME_EMOTION_DELTAS,
+} from '../../src/psyche/data/emotions';
+import { actionRegistry } from '../../src/psyche/data/actions';
 
 /** Need effects applied when a conversation ends */
 const CONVERSATION_NEED_REPLENISHES: ActionEffect[] = [
@@ -234,6 +248,49 @@ export const agentRememberConversation = internalAction({
           .join(', ');
         console.log(
           `[Psyche] ${myName}: opinions updated — ${outcome} → ${deltaStr}`,
+        );
+      }
+
+      // ─── Update emotion after conversation ────────────────
+      const emotionDelta = OUTCOME_EMOTION_DELTAS[outcome];
+      if (emotionDelta.valence !== 0 || emotionDelta.arousal !== 0) {
+        const convEmotionProfile = CHARACTER_EMOTIONS[myName] ?? DEFAULT_EMOTIONAL_PROFILE;
+
+        let convEmotionDoc = await ctx.runQuery(internal.psyche.functions.getAgentEmotionInternal, {
+          worldId: args.worldId,
+          agentId: args.playerId,
+        });
+
+        let convEmotion: EmotionalState;
+        if (convEmotionDoc) {
+          convEmotion = {
+            valence: convEmotionDoc.valence,
+            arousal: convEmotionDoc.arousal,
+            lastUpdated: convEmotionDoc.lastUpdated,
+          };
+        } else {
+          // Lazy-initialize from character baseline
+          convEmotion = initializeEmotion(convEmotionProfile, now);
+          await ctx.runMutation(internal.psyche.functions.initializeAgentEmotion, {
+            worldId: args.worldId,
+            agentId: args.playerId,
+            valence: convEmotion.valence,
+            arousal: convEmotion.arousal,
+            lastUpdated: convEmotion.lastUpdated,
+          });
+        }
+
+        const updatedEmotion = applyEmotionDelta(convEmotion, emotionDelta, now);
+        await ctx.runMutation(internal.psyche.functions.updateAgentEmotion, {
+          worldId: args.worldId,
+          agentId: args.playerId,
+          valence: updatedEmotion.valence,
+          arousal: updatedEmotion.arousal,
+          lastUpdated: updatedEmotion.lastUpdated,
+        });
+
+        console.log(
+          `[Psyche] ${myName}: emotion after conversation — ${outcome} → valence ${emotionDelta.valence >= 0 ? '+' : ''}${emotionDelta.valence}, arousal ${emotionDelta.arousal >= 0 ? '+' : ''}${emotionDelta.arousal}`,
         );
       }
     }
@@ -579,6 +636,131 @@ export const agentDoSomething = internalAction({
       agentNeeds = depleteNeeds(agentNeeds, elapsedGameMinutes, needRegistry, now);
     }
 
+    // Step 2.5: Emotional decay + contagion
+    // Fetch character name → emotional profile
+    const emotionCharName = await ctx.runQuery(internal.psyche.functions.getPlayerName, {
+      worldId: args.worldId,
+      playerId: player.id,
+    });
+    const emotionProfile = CHARACTER_EMOTIONS[emotionCharName ?? ''] ?? DEFAULT_EMOTIONAL_PROFILE;
+
+    // Fetch or lazy-init emotional state
+    let emotionDoc = await ctx.runQuery(internal.psyche.functions.getAgentEmotionInternal, {
+      worldId: args.worldId,
+      agentId: player.id,
+    });
+
+    let emotionState: EmotionalState;
+    if (emotionDoc) {
+      emotionState = {
+        valence: emotionDoc.valence,
+        arousal: emotionDoc.arousal,
+        lastUpdated: emotionDoc.lastUpdated,
+      };
+    } else {
+      emotionState = initializeEmotion(emotionProfile, now);
+      await ctx.runMutation(internal.psyche.functions.initializeAgentEmotion, {
+        worldId: args.worldId,
+        agentId: player.id,
+        valence: emotionState.valence,
+        arousal: emotionState.arousal,
+        lastUpdated: emotionState.lastUpdated,
+      });
+    }
+
+    // Decay toward baseline
+    const preDecay = { v: emotionState.valence, a: emotionState.arousal };
+    if (elapsedGameMinutes > 0) {
+      emotionState = decayEmotion(emotionState, elapsedGameMinutes, emotionProfile.baseline);
+    }
+
+    // Contagion: absorb emotions from nearby agents
+    let totalDValence = 0;
+    let totalDArousal = 0;
+
+    for (const otherPlayer of args.otherFreePlayers) {
+      const dx = player.position.x - otherPlayer.position.x;
+      const dy = player.position.y - otherPlayer.position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance > CONTAGION_MAX_DISTANCE) continue;
+
+      // Fetch the other agent's emotional state (skip if not initialized)
+      const otherEmotionDoc = await ctx.runQuery(internal.psyche.functions.getAgentEmotionInternal, {
+        worldId: args.worldId,
+        agentId: otherPlayer.id,
+      });
+      if (!otherEmotionDoc) continue;
+
+      const otherEmotion: EmotionalState = {
+        valence: otherEmotionDoc.valence,
+        arousal: otherEmotionDoc.arousal,
+        lastUpdated: otherEmotionDoc.lastUpdated,
+      };
+
+      // Get relationship for closeness
+      const relDoc = await ctx.runQuery(internal.psyche.functions.getRelationship, {
+        worldId: args.worldId,
+        fromAgentId: player.id,
+        toAgentId: otherPlayer.id,
+      });
+      const closeness = relationshipToCloseness(
+        relDoc
+          ? {
+              fromAgentId: relDoc.fromAgentId,
+              toAgentId: relDoc.toAgentId,
+              trust: relDoc.trust,
+              affinity: relDoc.affinity,
+              respect: relDoc.respect,
+              frequency: relDoc.frequency,
+              familiarity: relDoc.familiarity,
+              lastInteraction: relDoc.lastInteraction,
+            }
+          : null,
+      );
+
+      // Look up the sender's charisma
+      const otherCharName = await ctx.runQuery(internal.psyche.functions.getPlayerName, {
+        worldId: args.worldId,
+        playerId: otherPlayer.id,
+      });
+      const senderProfile = CHARACTER_EMOTIONS[otherCharName ?? ''] ?? DEFAULT_EMOTIONAL_PROFILE;
+
+      // Composite: receiver's receptivity, sender's charisma
+      const compositeProfile = {
+        baseline: emotionProfile.baseline,
+        receptivity: emotionProfile.receptivity,
+        charisma: senderProfile.charisma,
+      };
+
+      const delta = transferEmotion(otherEmotion, emotionState, distance, closeness, compositeProfile);
+      totalDValence += delta.dValence;
+      totalDArousal += delta.dArousal;
+    }
+
+    // Apply contagion deltas
+    if (totalDValence !== 0 || totalDArousal !== 0) {
+      emotionState = applyEmotionDelta(emotionState, { valence: totalDValence, arousal: totalDArousal }, now);
+    }
+
+    // Persist decayed + contagioned emotion
+    await ctx.runMutation(internal.psyche.functions.updateAgentEmotion, {
+      worldId: args.worldId,
+      agentId: player.id,
+      valence: emotionState.valence,
+      arousal: emotionState.arousal,
+      lastUpdated: emotionState.lastUpdated,
+    });
+
+    if (preDecay.v !== emotionState.valence || preDecay.a !== emotionState.arousal) {
+      const contagionStr = totalDValence !== 0 || totalDArousal !== 0
+        ? `, contagion: v${totalDValence >= 0 ? '+' : ''}${totalDValence.toFixed(3)}/a${totalDArousal >= 0 ? '+' : ''}${totalDArousal.toFixed(3)}`
+        : '';
+      console.log(
+        `[Psyche] ${emotionCharName ?? agent.id}: emotion ${preDecay.v.toFixed(2)}/${preDecay.a.toFixed(2)} → ${emotionState.valence.toFixed(2)}/${emotionState.arousal.toFixed(2)}${contagionStr}`,
+      );
+    }
+
     const location = getLocationAtPosition(player.position);
 
     // Step 3: Check for stored travel intent (commitment mechanism)
@@ -624,6 +806,19 @@ export const agentDoSomething = internalAction({
             lastUpdated: n.lastUpdated,
           })),
         });
+
+        // Apply action emotional effects (look up from registry)
+        const intentAction = actionRegistry.get(pendingIntent.actionId);
+        if (intentAction?.emotionalEffects) {
+          emotionState = applyEmotionDelta(emotionState, intentAction.emotionalEffects, now);
+          await ctx.runMutation(internal.psyche.functions.updateAgentEmotion, {
+            worldId: args.worldId,
+            agentId: player.id,
+            valence: emotionState.valence,
+            arousal: emotionState.arousal,
+            lastUpdated: emotionState.lastUpdated,
+          });
+        }
 
         await ctx.runMutation(internal.psyche.functions.clearAgentIntent, {
           worldId: args.worldId,
@@ -800,6 +995,18 @@ export const agentDoSomething = internalAction({
         lastUpdated: n.lastUpdated,
       })),
     });
+
+    // Apply action emotional effects
+    if (bestAction.action.emotionalEffects) {
+      emotionState = applyEmotionDelta(emotionState, bestAction.action.emotionalEffects, now);
+      await ctx.runMutation(internal.psyche.functions.updateAgentEmotion, {
+        worldId: args.worldId,
+        agentId: player.id,
+        valence: emotionState.valence,
+        arousal: emotionState.arousal,
+        lastUpdated: emotionState.lastUpdated,
+      });
+    }
 
     await logPsycheDecision(ctx, args.worldId, agent.id, now, scored, updatedNeeds, location, result.conflicts);
 

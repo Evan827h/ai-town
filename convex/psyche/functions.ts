@@ -274,6 +274,89 @@ export const updateAgentOpinions = internalMutation({
   },
 });
 
+// ─── Emotion functions ──────────────────────────────────────
+
+/** Get the agent's emotional state (public — for debug UI) */
+export const getAgentEmotion = query({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentEmotions')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .unique();
+  },
+});
+
+/** Get the agent's emotional state (internal — for agent loop + conversation prompts) */
+export const getAgentEmotionInternal = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentEmotions')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .unique();
+  },
+});
+
+/** Initialize emotional state for a new agent */
+export const initializeAgentEmotion = internalMutation({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+    valence: v.float64(),
+    arousal: v.float64(),
+    lastUpdated: v.float64(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert('agentEmotions', {
+      worldId: args.worldId,
+      agentId: args.agentId,
+      valence: args.valence,
+      arousal: args.arousal,
+      lastUpdated: args.lastUpdated,
+    });
+  },
+});
+
+/** Update emotional state — upsert */
+export const updateAgentEmotion = internalMutation({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+    valence: v.float64(),
+    arousal: v.float64(),
+    lastUpdated: v.float64(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('agentEmotions')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        valence: args.valence,
+        arousal: args.arousal,
+        lastUpdated: args.lastUpdated,
+      });
+    } else {
+      await ctx.db.insert('agentEmotions', {
+        worldId: args.worldId,
+        agentId: args.agentId,
+        valence: args.valence,
+        arousal: args.arousal,
+        lastUpdated: args.lastUpdated,
+      });
+    }
+  },
+});
+
 // ─── Relationship functions ──────────────────────────────────
 
 /** Get all relationships for an agent (internal — used by agent loop) */
