@@ -52,6 +52,7 @@ export interface ActionDefinition {
   requires?: ActionRequirement[];
   /** Which relationship dimensions matter for this action (weights sum to ~1.0) */
   socialWeights?: SocialWeights;
+  moralCosts?: MoralTag[];
 }
 
 export interface ScoredAction {
@@ -102,6 +103,32 @@ export type InteractionOutcome =
   | 'betrayal'
   | 'impressive'
   | 'neutral';
+
+// ─── Moral Compass Types ─────────────────────────────────────
+
+export interface MoralValue {
+  id: string;
+  name: string;
+  description: string;
+}
+
+/** Per-character moral profile — weights 0..1 for each moral value */
+export interface MoralProfile {
+  /** moral value ID → importance weight (0..1) */
+  weights: Record<string, number>;
+  /** effectiveSeverity >= this → action is hard-vetoed (removed from options) */
+  hardVetoThreshold: number;
+  /** totalPenalty > this → flag internal conflict */
+  conflictThreshold: number;
+}
+
+/** Moral cost attached to an action — how much it violates a value */
+export interface MoralTag {
+  /** moral value ID (must exist in MORAL_VALUES registry) */
+  value: string;
+  /** 0..1, base severity before weighting by character profile */
+  severity: number;
+}
 
 // Registry containers — simple Maps, not database rows
 export type NeedRegistry = Map<string, NeedDefinition>;
