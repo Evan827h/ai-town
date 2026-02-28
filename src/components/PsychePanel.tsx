@@ -8,6 +8,7 @@ import { ServerGame } from '../hooks/serverGame';
 
 // Need definitions for display (colors, thresholds)
 import { needRegistry } from '../psyche/data/needs';
+import { OPINION_TOPICS, OPINION_NEUTRAL } from '../psyche/data/opinions';
 
 type MemoryFilter = 'all' | 'conversation' | 'reflection' | 'relationship';
 
@@ -36,6 +37,12 @@ export default function PsychePanel({
 
   // Relationships query uses player ID (relationships are keyed by player ID)
   const relationships = useQuery(api.psyche.functions.getAgentRelationships, {
+    worldId,
+    agentId: playerId as string,
+  });
+
+  // Opinions query also keyed by player ID
+  const opinions = useQuery(api.psyche.functions.getAgentOpinions, {
     worldId,
     agentId: playerId as string,
   });
@@ -90,6 +97,28 @@ export default function PsychePanel({
           <div className="text-sm text-brown-300 text-center py-2">
             Needs not initialized yet...
           </div>
+        )}
+      </div>
+
+      {/* ─── Opinions Section ─── */}
+      <div className="box mt-4">
+        <h2 className="bg-brown-700 p-2 font-display text-lg tracking-wider shadow-solid text-center">
+          Opinions
+        </h2>
+      </div>
+      <div className="mt-2 space-y-2">
+        {opinions && opinions.length > 0 ? (
+          [...opinions]
+            .sort((a, b) => Math.abs(b.value - OPINION_NEUTRAL) - Math.abs(a.value - OPINION_NEUTRAL))
+            .map((op) => {
+              const topic = OPINION_TOPICS.find((t) => t.id === op.topicId);
+              if (!topic) return null;
+              return (
+                <OpinionBar key={op.topicId} name={topic.name} value={op.value} />
+              );
+            })
+        ) : (
+          <div className="text-sm text-brown-300 text-center py-2">No opinions yet...</div>
         )}
       </div>
 
@@ -263,6 +292,50 @@ function NeedBar({
             style={{ left: `${(criticalThreshold / maxValue) * 100}%` }}
           />
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Opinion Bar Component (center-anchored, 0..10) ─────────
+
+function getOpinionLabel(value: number): string {
+  if (value >= 9) return 'loves';
+  if (value >= 7) return 'likes';
+  if (value <= 2) return 'hates';
+  if (value <= 4) return 'dislikes';
+  return 'neutral';
+}
+
+function OpinionBar({ name, value }: { name: string; value: number }) {
+  // Center at 5 (neutral). Green extends right for positive, orange extends left for negative.
+  const normalized = (value / 10) * 100; // 0..100, 50 = neutral
+  const isPositive = value >= OPINION_NEUTRAL;
+
+  const barLeft = isPositive ? 50 : normalized;
+  const barWidth = isPositive ? normalized - 50 : 50 - normalized;
+
+  const barColor = isPositive ? 'bg-green-500' : 'bg-orange-500';
+  const label = getOpinionLabel(value);
+
+  return (
+    <div className="px-1">
+      <div className="flex justify-between text-xs mb-0.5">
+        <span className="text-brown-200">{name}</span>
+        <span
+          className={`tabular-nums ${isPositive && value > OPINION_NEUTRAL ? 'text-green-400' : value < OPINION_NEUTRAL ? 'text-orange-400' : 'text-brown-400'}`}
+        >
+          {label} ({Math.round(value)}/10)
+        </span>
+      </div>
+      <div className="w-full bg-brown-800 h-1.5 rounded-sm relative">
+        {/* Center line (neutral = 5) */}
+        <div className="absolute top-0 h-full border-l border-brown-500" style={{ left: '50%' }} />
+        {/* Value bar */}
+        <div
+          className={`absolute top-0 h-full rounded-sm transition-all duration-500 ${barColor}`}
+          style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
+        />
       </div>
     </div>
   );
