@@ -144,6 +144,53 @@ const actionDefinitions: ActionDefinition[] = [
     costs: [],
   },
 
+  // === Morally-weighted actions ===
+  // These give the moral compass visible behavior — they replenish needs well
+  // but carry ethical costs that vary by character profile.
+  {
+    id: 'gossip_at_cafe',
+    name: 'Gossip',
+    description: 'Sharing juicy rumors about others at the cafe',
+    emoji: '🗣️',
+    locationRequirement: 'cafe',
+    duration: 20,
+    replenishes: [
+      { needId: 'social', amount: 25 },
+      { needId: 'fun', amount: 15 },
+    ],
+    costs: [{ needId: 'energy', amount: 3 }],
+    socialWeights: { affinity: 0.6, frequency: 0.4 },
+    moralCosts: [{ moralValueId: 'honesty', severity: 0.6 }],
+  },
+  {
+    id: 'eavesdrop',
+    name: 'Eavesdrop',
+    description: 'Listening in on nearby conversations',
+    emoji: '👂',
+    locationRequirement: 'cafe',
+    duration: 15,
+    replenishes: [
+      { needId: 'fun', amount: 10 },
+      { needId: 'social', amount: 5 },
+    ],
+    costs: [],
+    moralCosts: [
+      { moralValueId: 'fairness', severity: 0.5 },
+      { moralValueId: 'liberty', severity: 0.4 },
+    ],
+  },
+  {
+    id: 'skip_plans',
+    name: 'Skip Plans',
+    description: 'Bailing on a planned meetup to stay home',
+    emoji: '🙈',
+    locationRequirement: 'home',
+    duration: 10,
+    replenishes: [{ needId: 'comfort', amount: 15 }],
+    costs: [],
+    moralCosts: [{ moralValueId: 'loyalty', severity: 0.7 }],
+  },
+
   // === Universal actions ===
   {
     id: 'chat_with_nearby',
@@ -174,8 +221,8 @@ export const actionRegistry: ActionRegistry = new Map(actionDefinitions.map((a) 
  * '*' matches any location (universal actions).
  */
 const locationActions: Record<string, string[]> = {
-  cafe: ['eat_at_cafe', 'socialize_at_cafe', 'people_watch'],
-  home: ['sleep_at_home', 'nap', 'cook_at_home', 'play_game'],
+  cafe: ['eat_at_cafe', 'socialize_at_cafe', 'people_watch', 'gossip_at_cafe', 'eavesdrop'],
+  home: ['sleep_at_home', 'nap', 'cook_at_home', 'play_game', 'skip_plans'],
   park: ['exercise_at_park', 'rest_on_bench', 'read_at_park'],
   '*': ['chat_with_nearby', 'wander'],
 };
