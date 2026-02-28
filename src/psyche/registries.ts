@@ -114,7 +114,11 @@ export interface MoralValue {
 
 /** Per-character moral profile — weights 0..1 for each moral value */
 export interface MoralProfile {
-  /** moral value ID → importance weight (0..1) */
+  /**
+   * moral value ID → importance weight (0..1, inclusive).
+   * Values outside this range are NOT clamped by the scorer
+   * and will produce effectiveSeverity values that break threshold logic.
+   */
   weights: Record<string, number>;
   /** effectiveSeverity >= this → action is hard-vetoed (removed from options) */
   hardVetoThreshold: number;
@@ -124,9 +128,9 @@ export interface MoralProfile {
 
 /** Moral cost attached to an action — how much it violates a value */
 export interface MoralTag {
-  /** moral value ID (must exist in MORAL_VALUES registry) */
-  value: string;
-  /** 0..1, base severity before weighting by character profile */
+  /** ID of the moral value being violated (must exist in MORAL_VALUES registry) */
+  moralValueId: string;
+  /** 0..1, base severity before weighting by character profile. Not clamped by the scorer — caller is responsible for valid range. */
   severity: number;
 }
 
