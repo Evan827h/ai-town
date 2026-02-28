@@ -8,7 +8,6 @@ import {
   leaveConversationMessage,
   startConversationMessage,
 } from '../agent/conversation';
-import { assertNever } from '../util/assertNever';
 import { serializedAgent } from './agent';
 import { CONVERSATION_COOLDOWN } from '../constants';
 import { api, internal } from '../_generated/api';
@@ -203,27 +202,115 @@ export const agentGenerateMessage = internalAction({
     messageUuid: v.string(),
   },
   handler: async (ctx, args) => {
-    let completionFn;
-    switch (args.type) {
-      case 'start':
-        completionFn = startConversationMessage;
-        break;
-      case 'continue':
-        completionFn = continueConversationMessage;
-        break;
-      case 'leave':
-        completionFn = leaveConversationMessage;
-        break;
-      default:
-        assertNever(args.type);
+    let text: string;
+
+    if (args.type === 'leave') {
+      // ─── Pre-leave scoring: decide next action BEFORE generating goodbye ───
+      let nextPlan: string | undefined;
+
+      // Fetch the player's position for location-based scoring
+      const promptData = await ctx.runQuery(internal.agent.conversation.queryPromptData, {
+        worldId: args.worldId,
+        playerId: args.playerId,
+        otherPlayerId: args.otherPlayerId,
+        conversationId: args.conversationId,
+      });
+
+      // Fetch current needs and deplete for elapsed time
+      const needDocs = await ctx.runQuery(internal.psyche.functions.getAgentNeedsInternal, {
+        worldId: args.worldId,
+        agentId: args.agentId,
+      });
+
+      if (needDocs.length > 0) {
+        const now = Date.now();
+        let agentNeeds: AgentNeedState[] = needDocs.map(
+          (d: { needId: string; currentValue: number; lastUpdated: number }) => ({
+            needId: d.needId,
+            currentValue: d.currentValue,
+            lastUpdated: d.lastUpdated,
+          }),
+        );
+
+        // Deplete for elapsed time
+        const lastUpdated = Math.min(...agentNeeds.map((n) => n.lastUpdated));
+        const elapsedMs = Math.max(0, now - lastUpdated);
+        const elapsedGameMinutes = realMsToGameMinutes(elapsedMs);
+        if (elapsedGameMinutes > 0) {
+          agentNeeds = depleteNeeds(agentNeeds, elapsedGameMinutes, needRegistry, now);
+        }
+
+        // Preview conversation effects (don't persist — just for scoring)
+        const predictedNeeds = applyActionEffects(
+          agentNeeds,
+          CONVERSATION_NEED_REPLENISHES,
+          CONVERSATION_NEED_COSTS,
+          needRegistry,
+          now,
+        );
+
+        // Score with predicted post-conversation needs
+        const result = await scoreNextAction(
+          ctx,
+          args.worldId,
+          args.agentId,
+          args.playerId,
+          promptData.player.position,
+          [], // no nearby player info available here — relationship modifiers will be approximate
+          predictedNeeds,
+        );
+
+        if (result && result.scored.length > 0) {
+          const bestAction = result.scored[0];
+          nextPlan = `${bestAction.action.name} ${bestAction.action.emoji}`;
+
+          // Store as intent so agentDoSomething follows through
+          const criticalNeedsNow = predictedNeeds
+            .filter((n) => {
+              const def = needRegistry.get(n.needId);
+              return def && n.currentValue < def.criticalThreshold;
+            })
+            .map((n) => n.needId);
+
+          await ctx.runMutation(internal.psyche.functions.setAgentIntent, {
+            worldId: args.worldId,
+            agentId: args.agentId,
+            actionId: bestAction.action.id,
+            actionName: bestAction.action.name,
+            actionDescription: bestAction.action.description,
+            actionEmoji: bestAction.action.emoji,
+            actionDuration: bestAction.action.duration,
+            replenishes: bestAction.action.replenishes,
+            costs: bestAction.action.costs,
+            targetLocation: bestAction.action.locationRequirement ?? result.location,
+            criticalNeedsAtDecision: criticalNeedsNow,
+          });
+
+          console.log(
+            `[Psyche] Agent ${args.agentId}: pre-leave scored next action "${bestAction.action.name}" (score: ${bestAction.score.toFixed(1)})`,
+          );
+        }
+      }
+
+      text = await leaveConversationMessage(
+        ctx,
+        args.worldId,
+        args.conversationId as GameId<'conversations'>,
+        args.playerId as GameId<'players'>,
+        args.otherPlayerId as GameId<'players'>,
+        nextPlan,
+      );
+    } else {
+      // Start or continue — unchanged
+      const completionFn = args.type === 'start' ? startConversationMessage : continueConversationMessage;
+      text = await completionFn(
+        ctx,
+        args.worldId,
+        args.conversationId as GameId<'conversations'>,
+        args.playerId as GameId<'players'>,
+        args.otherPlayerId as GameId<'players'>,
+      );
     }
-    const text = await completionFn(
-      ctx,
-      args.worldId,
-      args.conversationId as GameId<'conversations'>,
-      args.playerId as GameId<'players'>,
-      args.otherPlayerId as GameId<'players'>,
-    );
 
     await ctx.runMutation(internal.aiTown.agent.agentSendMessage, {
       worldId: args.worldId,
