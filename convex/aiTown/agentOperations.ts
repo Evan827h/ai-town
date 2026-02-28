@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
-import { internalAction } from '../_generated/server';
+import { ActionCtx, internalAction } from '../_generated/server';
+import { Id } from '../_generated/dataModel';
 import { WorldMap, serializedWorldMap } from './worldMap';
 import { rememberConversation } from '../agent/memory';
 import { GameId, agentId, conversationId, playerId } from './ids';
@@ -337,8 +338,8 @@ export const agentGenerateMessage = internalAction({
  * @returns The top scored action and the needs used for scoring, or null if no actions available.
  */
 async function scoreNextAction(
-  ctx: any,
-  worldId: any,
+  ctx: ActionCtx,
+  worldId: Id<'worlds'>,
   agentId: string,
   playerId: string,
   playerPosition: { x: number; y: number },
@@ -750,8 +751,8 @@ export const agentDoSomething = internalAction({
 
 /** Log a psyche decision for the debug panel */
 async function logPsycheDecision(
-  ctx: any,
-  worldId: any,
+  ctx: ActionCtx,
+  worldId: Id<'worlds'>,
   agentIdValue: string,
   timestamp: number,
   scored: { action: { id: string; name: string; emoji: string }; score: number }[],
