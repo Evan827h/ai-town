@@ -13,6 +13,7 @@ import {
   INVITE_TIMEOUT,
   MAX_ACTIVITY_CONVERSATION_MESSAGES,
   MAX_CONVERSATION_DURATION,
+  MAX_CONVERSATION_INVITE_DISTANCE,
   MAX_CONVERSATION_MESSAGES,
   MESSAGE_COOLDOWN,
   MIDPOINT_THRESHOLD,
@@ -410,6 +411,10 @@ export const findConversationCandidate = internalQuery({
     }
 
     for (const otherPlayer of otherFreePlayers) {
+      // Hard distance cutoff — don't invite players across the map
+      if (distance(otherPlayer.position, position) > MAX_CONVERSATION_INVITE_DISTANCE) {
+        continue;
+      }
       // Find the latest conversation we're both members of.
       const lastMember = await ctx.db
         .query('participatedTogether')

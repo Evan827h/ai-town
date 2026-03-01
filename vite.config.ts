@@ -5,7 +5,15 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   base: '/ai-town',
   plugins: [react()],
+  test: {
+    globals: true,
+    exclude: ['.worktrees/**', 'node_modules/**'],
+  },
   server: {
-    allowedHosts: ['ai-town-your-app-name.fly.dev', 'localhost', '127.0.0.1'],
+    host: '0.0.0.0',
+    hmr: {
+      host: process.env.VITE_HOST,
+    },
+    allowedHosts: ['ai-town-your-app-name.fly.dev', 'localhost', '127.0.0.1', 'evans-pc'],
   },
 });

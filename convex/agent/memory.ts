@@ -5,6 +5,7 @@ import { internal } from '../_generated/api';
 import { LLMMessage, chatCompletion, fetchEmbedding } from '../util/llm';
 import { asyncMap } from '../util/asyncMap';
 import { GameId, agentId, conversationId, playerId } from '../aiTown/ids';
+import { REFLECTION_IMPORTANCE_THRESHOLD } from '../constants';
 import { SerializedPlayer } from '../aiTown/player';
 import { memoryFields } from './schema';
 import { parseConversationOutcome } from '../../src/psyche/relationships';
@@ -364,13 +365,15 @@ async function reflectOnMemories(
     },
   );
 
-  // should only reflect if lastest 100 items have importance score of >500
-  const sumOfImportanceScore = memories
-    .filter((m) => m._creationTime > (lastReflectionTs ?? 0))
-    .reduce((acc, curr) => acc + curr.importance, 0);
-  const shouldReflect = sumOfImportanceScore > 500;
+  const recentMemories = memories.filter((m) => m._creationTime > (lastReflectionTs ?? 0));
+  const sumOfImportanceScore = recentMemories.reduce((acc, curr) => acc + curr.importance, 0);
+  const shouldReflect = sumOfImportanceScore > REFLECTION_IMPORTANCE_THRESHOLD;
 
   if (!shouldReflect) {
+    console.debug(
+      `Reflection progress for ${name}: ${sumOfImportanceScore}/${REFLECTION_IMPORTANCE_THRESHOLD} ` +
+        `(${recentMemories.length} memories since last reflection)`,
+    );
     return false;
   }
   console.debug('sum of importance score = ', sumOfImportanceScore);

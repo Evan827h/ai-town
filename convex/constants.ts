@@ -50,6 +50,10 @@ export const MAX_ACTIVITY_CONVERSATION_MESSAGES = 4;
 // Max distance (in tiles) for starting an in-place conversation during an activity
 export const ACTIVITY_CONVERSATION_DISTANCE = 5;
 
+// Max distance (in tiles) to consider inviting someone to a conversation while pathfinding.
+// Prevents agents from starting conversations across the entire map.
+export const MAX_CONVERSATION_INVITE_DISTANCE = 10;
+
 // Wait for 1s after sending an input to the engine. We can remove this
 // once we can await on an input being processed.
 export const INPUT_DELAY = 1000;
@@ -86,3 +90,8 @@ export const DEFAULT_NAME = 'Me';
 
 // Action IDs that represent sleeping — agents doing these should not be disturbed.
 export const SLEEP_ACTION_IDS = new Set(['sleep_at_home', 'nap']);
+
+// Accumulated importance score needed before an agent reflects on recent memories.
+// Architecture target: ~2-3 reflections per game day. With importance 0-9 per memory,
+// 100 means roughly 11-20 memories trigger a reflection.
+export const REFLECTION_IMPORTANCE_THRESHOLD = 100;

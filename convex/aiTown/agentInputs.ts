@@ -8,6 +8,8 @@ import { point } from '../util/types';
 import { Descriptions } from '../../data/characters';
 import { AgentDescription } from './agentDescription';
 import { Agent } from './agent';
+import { distance } from '../util/geometry';
+import { MAX_CONVERSATION_INVITE_DISTANCE } from '../constants';
 
 export const agentInputs = {
   finishRememberConversation: inputHandler({
@@ -62,12 +64,20 @@ export const agentInputs = {
         if (!invitee) {
           throw new Error(`Couldn't find player: ${inviteeId}`);
         }
-        // Start in-place conversation if either player is doing an activity
-        const eitherDoingActivity =
-          (player.activity && player.activity.until > now) ||
-          (invitee.activity && invitee.activity.until > now);
-        Conversation.start(game, now, player, invitee, !!eitherDoingActivity);
-        agent.lastInviteAttempt = now;
+        // Defense-in-depth: positions may have changed since candidate was selected
+        const dist = distance(player.position, invitee.position);
+        if (dist > MAX_CONVERSATION_INVITE_DISTANCE) {
+          console.log(
+            `[Psyche] Skipping conversation: ${player.id} too far from ${invitee.id} (${dist.toFixed(1)} tiles)`,
+          );
+        } else {
+          // Start in-place conversation if either player is doing an activity
+          const eitherDoingActivity =
+            (player.activity && player.activity.until > now) ||
+            (invitee.activity && invitee.activity.until > now);
+          Conversation.start(game, now, player, invitee, !!eitherDoingActivity);
+          agent.lastInviteAttempt = now;
+        }
       }
       if (args.destination) {
         movePlayer(game, now, player, args.destination);
