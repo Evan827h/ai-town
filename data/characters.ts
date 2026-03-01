@@ -71,6 +71,9 @@ export const characters = [
     spritesheetData: f8SpritesheetData,
     speed: 0.15,
   },
+  // First 8 entries (f1-f8 at speed 0.15) are standard sprites.
+  // Second 7 entries (f2-f8 at speed 0.1) are slow-walk variants from the AI Town fork.
+  // Only f5 (Alex) and f3 (Maya) are actively used in Descriptions.
   {
     name: 'f2',
     textureUrl: '/ai-town/assets/32x32folk.png',

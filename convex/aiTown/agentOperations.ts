@@ -672,6 +672,37 @@ export const agentDoSomething = internalAction({
     }
 
     // Contagion: absorb emotions from nearby agents
+    // Batch-fetch relationships and neighbor names to avoid per-neighbor queries
+    const contagionRelDocs = await ctx.runQuery(internal.psyche.functions.getRelationshipsForAgent, {
+      worldId: args.worldId,
+      agentId: player.id,
+    });
+    const relMap = new Map(
+      contagionRelDocs.map((d: any) => [
+        d.toAgentId,
+        {
+          fromAgentId: d.fromAgentId,
+          toAgentId: d.toAgentId,
+          trust: d.trust,
+          affinity: d.affinity,
+          respect: d.respect,
+          frequency: d.frequency,
+          familiarity: d.familiarity,
+          lastInteraction: d.lastInteraction,
+        } as RelationshipEdge,
+      ]),
+    );
+
+    // Pre-fetch neighbor names for emotional profile lookup
+    const neighborNames = new Map<string, string>();
+    for (const otherPlayer of args.otherFreePlayers) {
+      const name = await ctx.runQuery(internal.psyche.functions.getPlayerName, {
+        worldId: args.worldId,
+        playerId: otherPlayer.id,
+      });
+      if (name) neighborNames.set(otherPlayer.id, name);
+    }
+
     let totalDValence = 0;
     let totalDArousal = 0;
 
@@ -695,32 +726,12 @@ export const agentDoSomething = internalAction({
         lastUpdated: otherEmotionDoc.lastUpdated,
       };
 
-      // Get relationship for closeness
-      const relDoc = await ctx.runQuery(internal.psyche.functions.getRelationship, {
-        worldId: args.worldId,
-        fromAgentId: player.id,
-        toAgentId: otherPlayer.id,
-      });
-      const closeness = relationshipToCloseness(
-        relDoc
-          ? {
-              fromAgentId: relDoc.fromAgentId,
-              toAgentId: relDoc.toAgentId,
-              trust: relDoc.trust,
-              affinity: relDoc.affinity,
-              respect: relDoc.respect,
-              frequency: relDoc.frequency,
-              familiarity: relDoc.familiarity,
-              lastInteraction: relDoc.lastInteraction,
-            }
-          : null,
-      );
+      // Use pre-fetched relationship for closeness (avoids per-neighbor query)
+      const relEdge = relMap.get(otherPlayer.id) ?? null;
+      const closeness = relationshipToCloseness(relEdge);
 
-      // Look up the sender's charisma
-      const otherCharName = await ctx.runQuery(internal.psyche.functions.getPlayerName, {
-        worldId: args.worldId,
-        playerId: otherPlayer.id,
-      });
+      // Use pre-fetched sender name for charisma lookup
+      const otherCharName = neighborNames.get(otherPlayer.id);
       const senderProfile = CHARACTER_EMOTIONS[otherCharName ?? ''] ?? DEFAULT_EMOTIONAL_PROFILE;
 
       // Composite: receiver's receptivity, sender's charisma

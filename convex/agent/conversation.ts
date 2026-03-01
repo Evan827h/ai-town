@@ -259,7 +259,7 @@ function currentActivityPrompt(
 
   prompt.push(`You are currently at the ${locationName}.`);
 
-  // Deduplicate by actionId — consecutive repeated choices collapse to one entry
+  // Deduplicate by actionId — repeated choices anywhere in the history collapse to one entry
   const seen = new Set<string>();
   const uniqueDecisions = recentDecisions
     .filter((d) => {
