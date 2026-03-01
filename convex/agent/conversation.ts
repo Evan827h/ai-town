@@ -10,7 +10,8 @@ import { NUM_MEMORIES_TO_SEARCH } from '../constants';
 import { getLocationAtPosition } from '../../src/psyche/data/locations';
 import { getOpinionContext } from '../../src/psyche/opinions';
 import { getEmotionContext } from '../../src/psyche/emotions';
-import { AgentOpinion, EmotionalState, TopicId } from '../../src/psyche/registries';
+import { getDesireContext } from '../../src/psyche/desires';
+import { AgentOpinion, Desire, DesireTag, DesireType, EmotionalState, TopicId } from '../../src/psyche/registries';
 
 const selfInternal = internal.agent.conversation;
 
@@ -21,7 +22,7 @@ export async function startConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, agent, otherAgent, lastConversation, recentDecisions, opinions, emotion } = await ctx.runQuery(
+  const { player, otherPlayer, agent, otherAgent, lastConversation, recentDecisions, opinions, emotion, desires } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -53,6 +54,7 @@ export async function startConversationMessage(
   prompt.push(...currentActivityPrompt(player, recentDecisions));
   prompt.push(...opinionPrompt(opinions));
   prompt.push(...emotionPrompt(emotion));
+  prompt.push(...desirePrompt(desires));
   prompt.push(...previousConversationPrompt(otherPlayer, lastConversation));
   prompt.push(...relatedMemoriesPrompt(memories));
   if (memoryWithOtherPlayer) {
@@ -93,7 +95,7 @@ export async function continueConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, conversation, agent, otherAgent, recentDecisions, opinions, emotion } = await ctx.runQuery(
+  const { player, otherPlayer, conversation, agent, otherAgent, recentDecisions, opinions, emotion, desires } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -118,6 +120,7 @@ export async function continueConversationMessage(
   prompt.push(...currentActivityPrompt(player, recentDecisions));
   prompt.push(...opinionPrompt(opinions));
   prompt.push(...emotionPrompt(emotion));
+  prompt.push(...desirePrompt(desires));
   prompt.push(...relatedMemoriesPrompt(memories));
   prompt.push(
     `Below is the current chat history between you and ${otherPlayer.name}.`,
@@ -156,7 +159,7 @@ export async function leaveConversationMessage(
   otherPlayerId: GameId<'players'>,
   nextPlan?: string,
 ): Promise<string> {
-  const { player, otherPlayer, conversation, agent, otherAgent, recentDecisions, opinions, emotion } = await ctx.runQuery(
+  const { player, otherPlayer, conversation, agent, otherAgent, recentDecisions, opinions, emotion, desires } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -174,6 +177,7 @@ export async function leaveConversationMessage(
   prompt.push(...currentActivityPrompt(player, recentDecisions));
   prompt.push(...opinionPrompt(opinions));
   prompt.push(...emotionPrompt(emotion));
+  prompt.push(...desirePrompt(desires));
   if (nextPlan) {
     prompt.push(`After this conversation, your plan is: ${nextPlan}`);
     prompt.push(`Mention what you're going to do next when saying goodbye.`);
@@ -317,6 +321,24 @@ function emotionPrompt(
   return [context];
 }
 
+function desirePrompt(
+  desireDocs: Array<{ type: string; description: string; intensity: number; tags: string[] }>,
+): string[] {
+  if (!desireDocs || desireDocs.length === 0) return [];
+  const desires: Desire[] = desireDocs.map((d) => ({
+    id: '',
+    type: d.type as DesireType,
+    description: d.description,
+    intensity: d.intensity,
+    tags: d.tags as DesireTag[],
+    createdAt: 0,
+    sourceMemoryIds: [],
+  }));
+  const context = getDesireContext(desires);
+  if (context.length === 0) return [];
+  return context;
+}
+
 async function previousMessages(
   ctx: ActionCtx,
   worldId: Id<'worlds'>,
@@ -434,6 +456,10 @@ export const queryPromptData = internalQuery({
       .query('agentEmotions')
       .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.playerId))
       .unique();
+    const desires = await ctx.db
+      .query('agentDesires')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.playerId))
+      .collect();
     return {
       player: { name: playerDescription.name, ...player },
       otherPlayer: { name: otherPlayerDescription.name, ...otherPlayer },
@@ -448,6 +474,7 @@ export const queryPromptData = internalQuery({
       recentDecisions,
       opinions,
       emotion,
+      desires,
     };
   },
 });
