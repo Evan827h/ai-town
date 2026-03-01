@@ -27,6 +27,7 @@ const actionDefinitions: ActionDefinition[] = [
     replenishes: [{ needId: 'hunger', amount: 40 }],
     costs: [{ needId: 'energy', amount: 5 }],
     emotionalEffects: { valence: 0.15, arousal: -0.1 },
+    desireTags: ['food', 'social'],
   },
   {
     id: 'socialize_at_cafe',
@@ -42,6 +43,7 @@ const actionDefinitions: ActionDefinition[] = [
     costs: [{ needId: 'hunger', amount: 5 }],
     socialWeights: { affinity: 0.5, trust: 0.2, frequency: 0.3 },
     emotionalEffects: { valence: 0.2, arousal: 0.1 },
+    desireTags: ['social', 'friendship'],
   },
   {
     id: 'people_watch',
@@ -57,6 +59,7 @@ const actionDefinitions: ActionDefinition[] = [
     costs: [],
     socialWeights: { affinity: 0.3, frequency: 0.3, familiarity: 0.4 },
     emotionalEffects: { valence: 0.05, arousal: -0.1 },
+    desireTags: ['social', 'solitude'],
   },
 
   // === Home actions ===
@@ -73,6 +76,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [{ needId: 'social', amount: 5 }],
     emotionalEffects: { valence: 0.1, arousal: -0.2 },
+    desireTags: ['rest'],
   },
   {
     id: 'nap',
@@ -84,6 +88,7 @@ const actionDefinitions: ActionDefinition[] = [
     replenishes: [{ needId: 'energy', amount: 25 }],
     costs: [],
     emotionalEffects: { valence: 0.1, arousal: -0.2 },
+    desireTags: ['rest'],
   },
   {
     id: 'cook_at_home',
@@ -98,6 +103,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [{ needId: 'energy', amount: 10 }],
     emotionalEffects: { valence: 0.2, arousal: 0.05 },
+    desireTags: ['food', 'creativity'],
   },
   {
     id: 'play_game',
@@ -109,6 +115,7 @@ const actionDefinitions: ActionDefinition[] = [
     replenishes: [{ needId: 'fun', amount: 30 }],
     costs: [{ needId: 'energy', amount: 5 }],
     emotionalEffects: { valence: 0.15, arousal: 0.1 },
+    desireTags: ['fun'],
   },
 
   // === Park actions ===
@@ -128,6 +135,7 @@ const actionDefinitions: ActionDefinition[] = [
       { needId: 'hunger', amount: 10 },
     ],
     emotionalEffects: { valence: 0.15, arousal: 0.2 },
+    desireTags: ['fun', 'nature'],
   },
   {
     id: 'rest_on_bench',
@@ -142,6 +150,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [],
     emotionalEffects: { valence: 0.1, arousal: -0.2 },
+    desireTags: ['rest', 'nature'],
   },
   {
     id: 'read_at_park',
@@ -156,6 +165,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [],
     emotionalEffects: { valence: 0.1, arousal: -0.15 },
+    desireTags: ['fun', 'solitude'],
   },
 
   // === Morally-weighted actions ===
@@ -176,6 +186,7 @@ const actionDefinitions: ActionDefinition[] = [
     socialWeights: { affinity: 0.6, frequency: 0.4 },
     moralCosts: [{ moralValueId: 'honesty', severity: 0.6 }],
     emotionalEffects: { valence: 0.1, arousal: 0.15 },
+    desireTags: ['social', 'fun'],
   },
   {
     id: 'eavesdrop',
@@ -194,6 +205,7 @@ const actionDefinitions: ActionDefinition[] = [
       { moralValueId: 'liberty', severity: 0.4 },
     ],
     emotionalEffects: { valence: -0.05, arousal: 0.15 },
+    desireTags: ['social'],
   },
   {
     id: 'skip_plans',
@@ -206,6 +218,7 @@ const actionDefinitions: ActionDefinition[] = [
     costs: [],
     moralCosts: [{ moralValueId: 'loyalty', severity: 0.7 }],
     emotionalEffects: { valence: -0.1, arousal: -0.1 },
+    desireTags: ['solitude', 'rest'],
   },
 
   // === Waterfall actions ===
@@ -222,6 +235,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [],
     emotionalEffects: { valence: 0.2, arousal: -0.25 },
+    desireTags: ['nature', 'solitude', 'rest'],
   },
   {
     id: 'fish_at_waterfall',
@@ -236,6 +250,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [{ needId: 'energy', amount: 5 }],
     emotionalEffects: { valence: 0.1, arousal: -0.15 },
+    desireTags: ['food', 'nature', 'fun'],
   },
 
   // === Meadow actions ===
@@ -252,6 +267,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [],
     emotionalEffects: { valence: 0.15, arousal: -0.2 },
+    desireTags: ['nature', 'fun', 'exploration'],
   },
   {
     id: 'forage_in_meadow',
@@ -266,6 +282,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [],
     emotionalEffects: { valence: 0.1, arousal: 0.05 },
+    desireTags: ['food', 'nature', 'exploration'],
   },
   {
     id: 'pick_flowers',
@@ -281,6 +298,7 @@ const actionDefinitions: ActionDefinition[] = [
     costs: [],
     socialWeights: { affinity: 0.6, familiarity: 0.4 },
     emotionalEffects: { valence: 0.2, arousal: 0.05 },
+    desireTags: ['nature', 'creativity', 'social'],
   },
 
   // === Workshop actions ===
@@ -297,6 +315,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     costs: [{ needId: 'energy', amount: 10 }],
     emotionalEffects: { valence: 0.15, arousal: 0.1 },
+    desireTags: ['creativity', 'productivity'],
   },
   {
     id: 'help_at_workshop',
@@ -315,6 +334,7 @@ const actionDefinitions: ActionDefinition[] = [
     ],
     socialWeights: { trust: 0.4, respect: 0.3, affinity: 0.3 },
     emotionalEffects: { valence: 0.1, arousal: 0.05 },
+    desireTags: ['social', 'friendship', 'productivity'],
   },
   {
     id: 'snoop_at_workshop',
@@ -333,6 +353,7 @@ const actionDefinitions: ActionDefinition[] = [
       { moralValueId: 'loyalty', severity: 0.3 },
     ],
     emotionalEffects: { valence: 0.05, arousal: 0.2 },
+    desireTags: ['exploration', 'fun'],
   },
 
   // === Universal actions ===
@@ -346,6 +367,7 @@ const actionDefinitions: ActionDefinition[] = [
     costs: [{ needId: 'energy', amount: 5 }],
     socialWeights: { affinity: 0.4, frequency: 0.4, trust: 0.2 },
     emotionalEffects: { valence: 0.15, arousal: 0.1 },
+    desireTags: ['social', 'friendship'],
   },
   {
     id: 'wander',
@@ -356,6 +378,7 @@ const actionDefinitions: ActionDefinition[] = [
     replenishes: [{ needId: 'fun', amount: 5 }],
     costs: [{ needId: 'energy', amount: 3 }],
     emotionalEffects: { valence: 0.0, arousal: -0.05 },
+    desireTags: ['exploration'],
   },
 ];
 
