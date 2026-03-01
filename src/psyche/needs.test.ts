@@ -1,5 +1,5 @@
 import { depleteNeeds, applyActionEffects, initializeNeeds } from './needs';
-import { AgentNeedState, NeedRegistry } from './registries';
+import { AgentNeedState, NeedId, NeedRegistry } from './registries';
 
 // Minimal test registry
 const testNeedDefs: NeedRegistry = new Map([
@@ -87,7 +87,7 @@ describe('depleteNeeds', () => {
 
   test('ignores needs not in registry', () => {
     const needs: AgentNeedState[] = [
-      { needId: 'unknown_need', currentValue: 50, lastUpdated: 0 },
+      { needId: 'unknown_need' as NeedId, currentValue: 50, lastUpdated: 0 },
     ];
     const result = depleteNeeds(needs, 60, testNeedDefs, 60);
     expect(result[0].currentValue).toBe(50); // unchanged

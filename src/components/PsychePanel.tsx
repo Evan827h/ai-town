@@ -8,6 +8,7 @@ import { ServerGame } from '../hooks/serverGame';
 
 // Need definitions for display (colors, thresholds)
 import { needRegistry } from '../psyche/data/needs';
+import { NeedId } from '../psyche/registries';
 import { OPINION_TOPICS, OPINION_NEUTRAL } from '../psyche/data/opinions';
 import { getEmotionLabel } from '../psyche/emotions';
 import { NEUTRAL_THRESHOLD } from '../psyche/data/emotions';
@@ -88,7 +89,7 @@ export default function PsychePanel({
           needs
             .sort((a, b) => a.currentValue - b.currentValue) // most urgent first
             .map((need) => {
-              const def = needRegistry.get(need.needId);
+              const def = needRegistry.get(need.needId as NeedId);
               if (!def) return null;
               return (
                 <NeedBar

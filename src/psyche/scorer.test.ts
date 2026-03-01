@@ -1,5 +1,5 @@
 import { scoreActions, scoreActionsDeterministic } from './scorer';
-import { ActionDefinition, AgentNeedState, NeedRegistry } from './registries';
+import { ActionDefinition, AgentNeedState, NeedId, NeedRegistry } from './registries';
 
 const testNeedDefs: NeedRegistry = new Map([
   [
@@ -241,7 +241,7 @@ describe('edge cases', () => {
       description: 'Tests unknown need',
       emoji: '❓',
       duration: 10,
-      replenishes: [{ needId: 'nonexistent', amount: 50 }],
+      replenishes: [{ needId: 'nonexistent' as NeedId, amount: 50 }],
       costs: [],
     };
     const needs = makeNeeds({});

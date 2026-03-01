@@ -1,7 +1,7 @@
-import { AgentNeedState, NeedRegistry } from './registries';
+import { AgentNeedState, NeedId, NeedRegistry } from './registries';
 
 export interface NeedEffect {
-  needId: string;
+  needId: NeedId;
   amount: number;
   duration?: number;
 }
@@ -55,7 +55,7 @@ export function applyActionEffects(
   gameTime: number,
 ): AgentNeedState[] {
   // Build a delta map from all effects
-  const deltas = new Map<string, number>();
+  const deltas = new Map<NeedId, number>();
   for (const r of replenishes) {
     deltas.set(r.needId, (deltas.get(r.needId) ?? 0) + r.amount);
   }

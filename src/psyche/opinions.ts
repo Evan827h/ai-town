@@ -6,7 +6,7 @@
  * LLM conversation prompts.
  */
 
-import { AgentOpinion, OpinionDelta } from './registries';
+import { AgentOpinion, OpinionDelta, TopicId } from './registries';
 import {
   OPINION_MIN,
   OPINION_MAX,
@@ -90,7 +90,7 @@ export function getOpinionContext(opinions: AgentOpinion[]): string[] {
  * Creates one AgentOpinion per registered topic.
  */
 export function initializeOpinions(
-  defaults: Record<string, number>,
+  defaults: Record<TopicId, number>,
   gameTime: number,
 ): AgentOpinion[] {
   return TOPIC_IDS.map((topicId) => ({

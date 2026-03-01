@@ -5,7 +5,7 @@
  * They inject personality context into LLM conversation prompts.
  */
 
-import { OpinionTopic, AgentOpinion, OpinionDelta, InteractionOutcome } from '../registries';
+import { OpinionTopic, AgentOpinion, OpinionDelta, InteractionOutcome, TopicId } from '../registries';
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -26,12 +26,12 @@ export const OPINION_TOPICS: OpinionTopic[] = [
   { id: 'rest', name: 'Rest', description: 'Relaxation, sleep, downtime, recovery' },
 ];
 
-export const TOPIC_IDS = OPINION_TOPICS.map((t) => t.id);
+export const TOPIC_IDS: TopicId[] = OPINION_TOPICS.map((t) => t.id);
 
 // ─── Character Defaults ──────────────────────────────────────
 
 /** Per-character starting opinions — keyed by character name (like MORAL_PROFILES) */
-export const CHARACTER_OPINIONS: Record<string, Record<string, number>> = {
+export const CHARACTER_OPINIONS: Record<string, Record<TopicId, number>> = {
   Alex: {
     food: 7,
     socializing: 6,
@@ -49,9 +49,9 @@ export const CHARACTER_OPINIONS: Record<string, Record<string, number>> = {
 };
 
 /** Fallback — all neutral */
-export const DEFAULT_OPINIONS: Record<string, number> = Object.fromEntries(
+export const DEFAULT_OPINIONS: Record<TopicId, number> = Object.fromEntries(
   TOPIC_IDS.map((id) => [id, OPINION_NEUTRAL]),
-);
+) as Record<TopicId, number>;
 
 // ─── Outcome → Opinion Deltas ────────────────────────────────
 

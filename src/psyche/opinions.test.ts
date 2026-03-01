@@ -14,16 +14,16 @@ import {
   OPINION_DECAY_RATE_PER_GAME_HOUR,
   OUTCOME_OPINION_DELTAS,
 } from './data/opinions';
-import { AgentOpinion, OpinionDelta } from './registries';
+import { AgentOpinion, OpinionDelta, TopicId } from './registries';
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-function makeOpinion(topicId: string, value: number, lastUpdated = 0): AgentOpinion {
+function makeOpinion(topicId: TopicId, value: number, lastUpdated = 0): AgentOpinion {
   return { topicId, value, lastUpdated };
 }
 
 function makeOpinions(values: Record<string, number>, lastUpdated = 0): AgentOpinion[] {
-  return Object.entries(values).map(([topicId, value]) => makeOpinion(topicId, value, lastUpdated));
+  return Object.entries(values).map(([topicId, value]) => makeOpinion(topicId as TopicId, value, lastUpdated));
 }
 
 // ─── applyOpinionDeltas ─────────────────────────────────────
@@ -69,7 +69,7 @@ describe('applyOpinionDeltas', () => {
 
   test('unknown topic in delta is ignored', () => {
     const opinions = [makeOpinion('food', 7)];
-    const deltas: OpinionDelta[] = [{ topicId: 'nonexistent', delta: 1.0 }];
+    const deltas: OpinionDelta[] = [{ topicId: 'nonexistent' as TopicId, delta: 1.0 }];
     const result = applyOpinionDeltas(opinions, deltas, 100);
     expect(result).toHaveLength(1);
     expect(result[0].value).toBe(7);

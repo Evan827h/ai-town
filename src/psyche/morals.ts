@@ -1,11 +1,11 @@
-import { ScoredAction, MoralProfile } from './registries';
+import { ScoredAction, MoralProfile, MoralValueId } from './registries';
 
 export interface MoralConflict {
   actionId: string;
   /** Combined penalty that exceeded the conflict threshold */
   penalty: number;
   /** Which moral value IDs were violated */
-  values: string[];
+  values: MoralValueId[];
 }
 
 export interface MoralFilterResult {
@@ -43,7 +43,7 @@ export function applyMoralFilter(
 
     let totalPenalty = 0;
     let vetoed = false;
-    const violatedValues: string[] = [];
+    const violatedValues: MoralValueId[] = [];
 
     for (const cost of moralCosts) {
       const weight = profile.weights[cost.moralValueId] ?? 0;

@@ -5,8 +5,14 @@
  * New world systems (economy, jobs, class) add data to registries, not logic to the engine.
  */
 
+// ─── Registry ID Types (compile-time typo protection) ────
+export type NeedId = 'hunger' | 'energy' | 'social' | 'comfort' | 'fun';
+export type MoralValueId = 'honesty' | 'loyalty' | 'fairness' | 'care' | 'authority' | 'liberty' | 'tradition';
+export type TopicId = 'food' | 'socializing' | 'nature' | 'work' | 'rest';
+export type LocationId = 'home' | 'cafe' | 'park';
+
 export interface NeedDefinition {
-  id: string;
+  id: NeedId;
   name: string;
   maxValue: number;
   /** Units lost per game-minute */
@@ -18,13 +24,13 @@ export interface NeedDefinition {
 }
 
 export interface AgentNeedState {
-  needId: string;
+  needId: NeedId;
   currentValue: number;
   lastUpdated: number; // game-time timestamp
 }
 
 export interface ActionEffect {
-  needId: string;
+  needId: NeedId;
   /** Positive = replenish, negative = cost */
   amount: number;
 }
@@ -41,7 +47,7 @@ export interface ActionDefinition {
   description: string;
   emoji: string;
   /** If set, agent must be at this location type to perform action */
-  locationRequirement?: string;
+  locationRequirement?: LocationId;
   /** How long the action takes in game-minutes */
   duration: number;
   /** Needs this action replenishes */
@@ -109,7 +115,7 @@ export type InteractionOutcome =
 // ─── Moral Compass Types ─────────────────────────────────────
 
 export interface MoralValue {
-  id: string;
+  id: MoralValueId;
   name: string;
   description: string;
 }
@@ -121,7 +127,7 @@ export interface MoralProfile {
    * Values outside this range are NOT clamped by the scorer
    * and will produce effectiveSeverity values that break threshold logic.
    */
-  weights: Record<string, number>;
+  weights: Record<MoralValueId, number>;
   /** effectiveSeverity >= this → action is hard-vetoed (removed from options) */
   hardVetoThreshold: number;
   /** totalPenalty > this → flag internal conflict */
@@ -131,7 +137,7 @@ export interface MoralProfile {
 /** Moral cost attached to an action — how much it violates a value */
 export interface MoralTag {
   /** ID of the moral value being violated (must exist in MORAL_VALUES registry) */
-  moralValueId: string;
+  moralValueId: MoralValueId;
   /** 0..1, base severity before weighting by character profile. Not clamped by the scorer — caller is responsible for valid range. */
   severity: number;
 }
@@ -139,20 +145,20 @@ export interface MoralTag {
 // ─── Opinion Tracking Types ──────────────────────────────────
 
 export interface OpinionTopic {
-  id: string;
+  id: TopicId;
   name: string;
   description: string;
 }
 
 export interface AgentOpinion {
-  topicId: string;
+  topicId: TopicId;
   /** 0 = strongly opposed, 5 = neutral, 10 = strongly supportive */
   value: number;
   lastUpdated: number;
 }
 
 export interface OpinionDelta {
-  topicId: string;
+  topicId: TopicId;
   /** Positive = more favorable, negative = less favorable */
   delta: number;
 }
@@ -181,6 +187,21 @@ export interface EmotionAnchor {
   arousal: number;
 }
 
+// ─── Location Zone Types ────────────────────────────────────
+
+export interface LocationZone {
+  id: LocationId;
+  name: string;
+  /** Bounding rectangle (tile coordinates) */
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** Point to pathfind to when heading to this location */
+  destination: { x: number; y: number };
+}
+
 // Registry containers — simple Maps, not database rows
-export type NeedRegistry = Map<string, NeedDefinition>;
+export type NeedRegistry = Map<NeedId, NeedDefinition>;
 export type ActionRegistry = Map<string, ActionDefinition>;
+export type LocationRegistry = Map<LocationId, LocationZone>;

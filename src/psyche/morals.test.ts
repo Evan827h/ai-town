@@ -1,12 +1,12 @@
 import { applyMoralFilter } from './morals';
 import { MORAL_PROFILES, DEFAULT_MORAL_PROFILE } from './data/morals';
-import { ScoredAction } from './registries';
+import { MoralTag, MoralValueId, ScoredAction } from './registries';
 
 // Helper to build a minimal ScoredAction
 function makeAction(
   id: string,
   score: number,
-  moralCosts: { moralValueId: string; severity: number }[] = [],
+  moralCosts: MoralTag[] = [],
 ): ScoredAction {
   return {
     score,
@@ -62,7 +62,7 @@ describe('applyMoralFilter', () => {
     });
 
     test('unknown moral value treated as zero weight (no effect)', () => {
-      const actions = [makeAction('weird_act', 100, [{ moralValueId: 'nonexistent_value', severity: 0.9 }])];
+      const actions = [makeAction('weird_act', 100, [{ moralValueId: 'nonexistent_value' as MoralValueId, severity: 0.9 }])];
       const { actions: filtered } = applyMoralFilter(actions, MORAL_PROFILES['Alex']);
       expect(filtered[0].score).toBe(100);
     });
@@ -157,7 +157,15 @@ describe('applyMoralFilter', () => {
       // both effectiveSeverities (0.035, 0.025) are below the old 0.1 threshold,
       // so with the old code `values` would be [] — the bug.
       const strictProfile = {
-        weights: { honesty: 0.5, loyalty: 0.5 },
+        weights: {
+          honesty: 0.5,
+          loyalty: 0.5,
+          fairness: 0,
+          care: 0,
+          authority: 0,
+          liberty: 0,
+          tradition: 0,
+        } as Record<MoralValueId, number>,
         hardVetoThreshold: 0.9,
         conflictThreshold: 0.05,
       };

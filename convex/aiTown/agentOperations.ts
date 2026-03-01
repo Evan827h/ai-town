@@ -21,7 +21,7 @@ import { depleteNeeds, applyActionEffects, initializeNeeds } from '../../src/psy
 import { needRegistry } from '../../src/psyche/data/needs';
 import { getActionsForLocation } from '../../src/psyche/data/actions';
 import { getLocationAtPosition, getLocationDestination } from '../../src/psyche/data/locations';
-import { ActionEffect, AgentNeedState, AgentOpinion, EmotionalState, RelationshipEdge } from '../../src/psyche/registries';
+import { ActionEffect, AgentNeedState, AgentOpinion, EmotionalState, NeedId, RelationshipEdge, TopicId } from '../../src/psyche/registries';
 import {
   applyRelationshipModifiers,
   initializeRelationship,
@@ -167,7 +167,7 @@ export const agentRememberConversation = internalAction({
       if (needDocs.length > 0) {
         const agentNeeds: AgentNeedState[] = needDocs.map(
           (d: { needId: string; currentValue: number; lastUpdated: number }) => ({
-            needId: d.needId,
+            needId: d.needId as NeedId,
             currentValue: d.currentValue,
             lastUpdated: d.lastUpdated,
           }),
@@ -208,7 +208,7 @@ export const agentRememberConversation = internalAction({
         if (opinionDocs.length > 0) {
           opinions = opinionDocs.map(
             (d: { topicId: string; value: number; lastUpdated: number }) => ({
-              topicId: d.topicId,
+              topicId: d.topicId as TopicId,
               value: d.value,
               lastUpdated: d.lastUpdated,
             }),
@@ -217,7 +217,7 @@ export const agentRememberConversation = internalAction({
           // Lazy-initialize from character defaults
           const defaults = CHARACTER_OPINIONS[myName] ?? DEFAULT_OPINIONS;
           opinions = Object.entries(defaults).map(([topicId, value]) => ({
-            topicId,
+            topicId: topicId as TopicId,
             value,
             lastUpdated: now,
           }));
@@ -343,7 +343,7 @@ export const agentGenerateMessage = internalAction({
         const now = Date.now();
         let agentNeeds: AgentNeedState[] = needDocs.map(
           (d: { needId: string; currentValue: number; lastUpdated: number }) => ({
-            needId: d.needId,
+            needId: d.needId as NeedId,
             currentValue: d.currentValue,
             lastUpdated: d.lastUpdated,
           }),
@@ -475,7 +475,7 @@ async function scoreNextAction(
 
     agentNeeds = needDocs.map(
       (d: { needId: string; currentValue: number; lastUpdated: number }) => ({
-        needId: d.needId,
+        needId: d.needId as NeedId,
         currentValue: d.currentValue,
         lastUpdated: d.lastUpdated,
       }),
@@ -621,7 +621,7 @@ export const agentDoSomething = internalAction({
     // Convert DB docs to AgentNeedState
     let agentNeeds: AgentNeedState[] = needDocs.map(
       (d: { needId: string; currentValue: number; lastUpdated: number }) => ({
-        needId: d.needId,
+        needId: d.needId as NeedId,
         currentValue: d.currentValue,
         lastUpdated: d.lastUpdated,
       }),
@@ -791,8 +791,8 @@ export const agentDoSomething = internalAction({
 
         const updatedNeeds = applyActionEffects(
           agentNeeds,
-          pendingIntent.replenishes,
-          pendingIntent.costs,
+          pendingIntent.replenishes.map((r: { needId: string; amount: number }) => ({ ...r, needId: r.needId as NeedId })),
+          pendingIntent.costs.map((c: { needId: string; amount: number }) => ({ ...c, needId: c.needId as NeedId })),
           needRegistry,
           now,
         );

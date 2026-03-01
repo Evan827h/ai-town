@@ -10,7 +10,7 @@ import { NUM_MEMORIES_TO_SEARCH } from '../constants';
 import { getLocationAtPosition } from '../../src/psyche/data/locations';
 import { getOpinionContext } from '../../src/psyche/opinions';
 import { getEmotionContext } from '../../src/psyche/emotions';
-import { AgentOpinion, EmotionalState } from '../../src/psyche/registries';
+import { AgentOpinion, EmotionalState, TopicId } from '../../src/psyche/registries';
 
 const selfInternal = internal.agent.conversation;
 
@@ -282,7 +282,7 @@ function opinionPrompt(
 ): string[] {
   if (!opinionDocs || opinionDocs.length === 0) return [];
   const opinions: AgentOpinion[] = opinionDocs.map((d) => ({
-    topicId: d.topicId,
+    topicId: d.topicId as TopicId,
     value: d.value,
     lastUpdated: d.lastUpdated,
   }));

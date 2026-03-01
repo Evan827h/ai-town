@@ -16,17 +16,7 @@
  *   - Right side (48-52, 3-13) — narrow walkable corridor
  */
 
-export interface LocationZone {
-  id: string;
-  name: string;
-  /** Bounding rectangle (tile coordinates) */
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-  /** Point to pathfind to when heading to this location */
-  destination: { x: number; y: number };
-}
+import { LocationZone, LocationId, LocationRegistry } from '../registries';
 
 const locationZones: LocationZone[] = [
   {
@@ -62,7 +52,9 @@ const locationZones: LocationZone[] = [
   },
 ];
 
-const zoneMap = new Map(locationZones.map((z) => [z.id, z]));
+export const locationRegistry: LocationRegistry = new Map(
+  locationZones.map((z) => [z.id, z]),
+);
 
 /**
  * Determine which location zone a position falls within.
@@ -87,7 +79,7 @@ export function getLocationAtPosition(position: { x: number; y: number }): strin
  * Used when the agent needs to walk to a specific location.
  */
 export function getLocationDestination(locationId: string): { x: number; y: number } | undefined {
-  return zoneMap.get(locationId)?.destination;
+  return locationRegistry.get(locationId as LocationId)?.destination;
 }
 
 /** Get all defined zones (for debug overlay rendering) */
