@@ -8,6 +8,7 @@ export const memoryFields = {
   description: v.string(),
   embeddingId: v.id('memoryEmbeddings'),
   importance: v.number(),
+  emotionalWeight: v.optional(v.float64()),
   lastAccess: v.number(),
   data: v.union(
     // Setting up dynamics between players

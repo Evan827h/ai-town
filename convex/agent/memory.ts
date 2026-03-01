@@ -100,7 +100,7 @@ OUTCOME: neutral`,
   const description = `Conversation with ${otherPlayer.name} at ${new Date(
     data.conversation._creationTime,
   ).toLocaleString()}: ${cleanText}`;
-  const importance = await calculateImportance(description);
+  const { importance, emotionalWeight } = await calculateImportance(description);
   const { embedding } = await fetchEmbedding(description);
   authors.delete(player.id as GameId<'players'>);
   await ctx.runMutation(selfInternal.insertMemory, {
@@ -108,6 +108,7 @@ OUTCOME: neutral`,
     playerId: player.id,
     description,
     importance,
+    emotionalWeight,
     lastAccess: messages[messages.length - 1]._creationTime,
     data: {
       type: 'conversation',
@@ -244,12 +245,14 @@ export const rankAndTouchMemories = internalMutation({
     const relevanceRange = makeRange(args.candidates.map((c) => c._score));
     const importanceRange = makeRange(relatedMemories.map((m) => m.importance));
     const recencyRange = makeRange(recencyScore);
+    const emotionalRange = makeRange(relatedMemories.map((m) => m.emotionalWeight ?? 0.5));
     const memoryScores = relatedMemories.map((memory, idx) => ({
       memory,
       overallScore:
         normalize(args.candidates[idx]._score, relevanceRange) +
         normalize(memory.importance, importanceRange) +
-        normalize(recencyScore[idx], recencyRange),
+        normalize(recencyScore[idx], recencyRange) +
+        normalize(memory.emotionalWeight ?? 0.5, emotionalRange),
     }));
     memoryScores.sort((a, b) => b.overallScore - a.overallScore);
     const accessed = memoryScores.slice(0, args.n);
@@ -278,29 +281,40 @@ export const loadMessages = internalQuery({
   },
 });
 
-async function calculateImportance(description: string) {
-  const { content: importanceRaw } = await chatCompletion({
+async function calculateImportance(
+  description: string,
+): Promise<{ importance: number; emotionalWeight: number }> {
+  const { content } = await chatCompletion({
     messages: [
       {
         role: 'user',
-        content: `On the scale of 0 to 9, where 0 is purely mundane (e.g., brushing teeth, making bed) and 9 is extremely poignant (e.g., a break up, college acceptance), rate the likely poignancy of the following piece of memory.
-      Memory: ${description}
-      Answer on a scale of 0 to 9. Respond with number only, e.g. "5"`,
+        content: `Rate this memory on two scales. Respond with two numbers separated by a comma, nothing else.
+Scale 1 (Importance): 0 = purely mundane (brushing teeth) to 9 = extremely poignant (a break up)
+Scale 2 (Emotional intensity): 0.0 = no emotion to 1.0 = overwhelming emotion
+Memory: ${description}
+Example response: "5, 0.7"`,
       },
     ],
     temperature: 0.0,
-    max_tokens: 1,
+    max_tokens: 10,
   });
-
-  let importance = parseFloat(importanceRaw);
+  const parts = content.split(',').map((s: string) => s.trim());
+  let importance = parseFloat(parts[0]);
+  let emotionalWeight = parseFloat(parts[1] ?? '0.5');
   if (isNaN(importance)) {
-    importance = +(importanceRaw.match(/\d+/)?.[0] ?? NaN);
+    importance = +(content.match(/\d+/)?.[0] ?? NaN);
   }
   if (isNaN(importance)) {
-    console.debug('Could not parse memory importance from: ', importanceRaw);
+    console.debug('Could not parse memory importance from: ', content);
     importance = 5;
   }
-  return importance;
+  if (isNaN(emotionalWeight)) {
+    emotionalWeight = 0.5;
+  }
+  return {
+    importance: Math.min(9, Math.max(0, importance)),
+    emotionalWeight: Math.min(1, Math.max(0, emotionalWeight)),
+  };
 }
 
 const { embeddingId: _embeddingId, ...memoryFieldsWithoutEmbeddingId } = memoryFields;
@@ -332,6 +346,7 @@ export const insertReflectionMemories = internalMutation({
         description: v.string(),
         relatedMemoryIds: v.array(v.id('memories')),
         importance: v.number(),
+        emotionalWeight: v.optional(v.float64()),
         embedding: v.array(v.float64()),
       }),
     ),
@@ -409,13 +424,14 @@ async function reflectOnMemories(
     const insights = JSON.parse(reflection) as { insight: string; statementIds: number[] }[];
     const memoriesToSave = await asyncMap(insights, async (item) => {
       const relatedMemoryIds = item.statementIds.map((idx: number) => memories[idx]._id);
-      const importance = await calculateImportance(item.insight);
+      const { importance, emotionalWeight } = await calculateImportance(item.insight);
       const { embedding } = await fetchEmbedding(item.insight);
       console.debug('adding reflection memory...', item.insight);
       return {
         description: item.insight,
         embedding,
         importance,
+        emotionalWeight,
         relatedMemoryIds,
       };
     });
