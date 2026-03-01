@@ -9,7 +9,11 @@ import { REFLECTION_IMPORTANCE_THRESHOLD } from '../constants';
 import { SerializedPlayer } from '../aiTown/player';
 import { memoryFields } from './schema';
 import { parseConversationOutcome } from '../../src/psyche/relationships';
-import { InteractionOutcome } from '../../src/psyche/registries';
+import { InteractionOutcome, Desire, DesireTag, DesireExtraction, TopicId } from '../../src/psyche/registries';
+import { mergeDesire, pruneDesires } from '../../src/psyche/desires';
+import { applyOpinionDeltas } from '../../src/psyche/opinions';
+import { ALL_DESIRE_TAGS } from '../../src/psyche/data/desires';
+import { OPINION_TOPICS } from '../../src/psyche/data/opinions';
 
 // How long to wait before updating a memory's last access time.
 export const MEMORY_ACCESS_THROTTLE = 300_000; // In ms
@@ -441,6 +445,141 @@ async function reflectOnMemories(
       playerId,
       reflections: memoriesToSave,
     });
+
+    // ─── Psyche extraction from reflections ─────────────────
+    try {
+      const validTags = ALL_DESIRE_TAGS.join(', ');
+      const validTopics = OPINION_TOPICS.map((t) => t.id).join(', ');
+      const extractionPrompt = `Given these reflection insights from ${name}, extract structured psyche updates.
+
+Insights:
+${memoriesToSave.map((m, i) => `${i + 1}. ${m.description}`).join('\n')}
+
+Return ONLY valid JSON with this structure:
+{
+  "wants": [{"description": "short goal description", "intensity": 0.1-1.0, "tags": ["social","friendship",...]}],
+  "fears": [{"description": "short anxiety description", "intensity": 0.1-1.0, "tags": ["social","safety",...]}],
+  "opinionDeltas": [{"topicId": "food|socializing|nature|work|rest", "delta": -2 to 2}]
+}
+
+Valid tags: ${validTags}.
+Valid topics: ${validTopics}.
+Only include wants/fears that are clearly implied. Empty arrays are fine.`;
+
+      const { content: extractionRaw } = await chatCompletion({
+        messages: [{ role: 'user', content: extractionPrompt }],
+        temperature: 0.0,
+        max_tokens: 500,
+      });
+      const extraction = JSON.parse(extractionRaw) as DesireExtraction;
+
+      // Validate and persist desires
+      const validTagSet = new Set<string>(ALL_DESIRE_TAGS);
+      const validTopicSet = new Set<string>(OPINION_TOPICS.map((t) => t.id));
+      const now = Date.now();
+
+      // Load existing desires
+      const existingDesireDocs = await ctx.runQuery(
+        internal.psyche.functions.getAgentDesiresInternal,
+        { worldId, agentId: playerId },
+      );
+      let desires: Desire[] = existingDesireDocs.map((d: any) => ({
+        id: d._id,
+        type: d.type as 'want' | 'fear',
+        description: d.description,
+        intensity: d.intensity,
+        tags: d.tags as DesireTag[],
+        createdAt: d.createdAt,
+        sourceMemoryIds: d.sourceMemoryIds,
+      }));
+
+      // Merge extracted wants
+      let wantCount = 0;
+      for (const want of extraction.wants ?? []) {
+        const validatedTags = (want.tags ?? []).filter((t) => validTagSet.has(t)) as DesireTag[];
+        if (validatedTags.length === 0 || !want.description) continue;
+        const intensity = Math.max(0.1, Math.min(1.0, want.intensity ?? 0.5));
+        desires = mergeDesire(desires, {
+          id: `want-${now}-${wantCount++}`,
+          type: 'want',
+          description: want.description,
+          intensity,
+          tags: validatedTags,
+          createdAt: now,
+          sourceMemoryIds: memoriesToSave.map((_, i) => `reflection-${i}`),
+        });
+      }
+
+      // Merge extracted fears
+      let fearCount = 0;
+      for (const fear of extraction.fears ?? []) {
+        const validatedTags = (fear.tags ?? []).filter((t) => validTagSet.has(t)) as DesireTag[];
+        if (validatedTags.length === 0 || !fear.description) continue;
+        const intensity = Math.max(0.1, Math.min(1.0, fear.intensity ?? 0.5));
+        desires = mergeDesire(desires, {
+          id: `fear-${now}-${fearCount++}`,
+          type: 'fear',
+          description: fear.description,
+          intensity,
+          tags: validatedTags,
+          createdAt: now,
+          sourceMemoryIds: memoriesToSave.map((_, i) => `reflection-${i}`),
+        });
+      }
+
+      // Persist desires
+      desires = pruneDesires(desires);
+      await ctx.runMutation(internal.psyche.functions.bulkUpdateDesires, {
+        worldId,
+        agentId: playerId,
+        desires: desires.map((d) => ({
+          type: d.type,
+          description: d.description,
+          intensity: d.intensity,
+          tags: d.tags,
+          createdAt: d.createdAt,
+          sourceMemoryIds: d.sourceMemoryIds,
+        })),
+      });
+
+      // Apply opinion deltas if any
+      const opinionDeltas = (extraction.opinionDeltas ?? []).filter(
+        (d) => validTopicSet.has(d.topicId) && typeof d.delta === 'number',
+      );
+      if (opinionDeltas.length > 0) {
+        const existingOpinionDocs = await ctx.runQuery(
+          internal.psyche.functions.getAgentOpinionsInternal,
+          { worldId, agentId: playerId },
+        );
+        if (existingOpinionDocs.length > 0) {
+          const opinions = existingOpinionDocs.map((o: any) => ({
+            topicId: o.topicId as TopicId,
+            value: o.value as number,
+            lastUpdated: o.lastUpdated as number,
+          }));
+          const updatedOpinions = applyOpinionDeltas(
+            opinions,
+            opinionDeltas.map((d) => ({ topicId: d.topicId as TopicId, delta: d.delta })),
+            now,
+          );
+          await ctx.runMutation(internal.psyche.functions.updateAgentOpinions, {
+            worldId,
+            agentId: playerId,
+            opinions: updatedOpinions.map((o) => ({
+              topicId: o.topicId,
+              value: o.value,
+              lastUpdated: o.lastUpdated,
+            })),
+          });
+        }
+      }
+
+      console.debug(
+        `[Psyche] ${name}: reflection extraction — ${wantCount} want(s), ${fearCount} fear(s), ${opinionDeltas.length} opinion delta(s)`,
+      );
+    } catch (extractionError) {
+      console.debug('[Psyche] Reflection extraction failed, skipping:', extractionError);
+    }
   } catch (e) {
     console.error('error saving or parsing reflection', e);
     console.debug('reflection', reflection);
