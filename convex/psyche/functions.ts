@@ -274,6 +274,72 @@ export const updateAgentOpinions = internalMutation({
   },
 });
 
+// ─── Desire functions ───────────────────────────────────────
+
+/** Get all desires for an agent (public — DEBUG ONLY, no access control) */
+export const getAgentDesires = query({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentDesires')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .collect();
+  },
+});
+
+/** Get all desires for an agent (internal — for agent loop + conversation prompts) */
+export const getAgentDesiresInternal = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('agentDesires')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .collect();
+  },
+});
+
+/** Replace all desires for an agent — bulk delete + insert */
+export const bulkUpdateDesires = internalMutation({
+  args: {
+    worldId: v.id('worlds'),
+    agentId: v.string(),
+    desires: v.array(
+      v.object({
+        type: v.string(),
+        description: v.string(),
+        intensity: v.float64(),
+        tags: v.array(v.string()),
+        createdAt: v.float64(),
+        sourceMemoryIds: v.array(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    // Delete all existing desires for this agent
+    const existing = await ctx.db
+      .query('agentDesires')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .collect();
+    for (const doc of existing) {
+      await ctx.db.delete(doc._id);
+    }
+    // Insert new desires
+    for (const desire of args.desires) {
+      await ctx.db.insert('agentDesires', {
+        worldId: args.worldId,
+        agentId: args.agentId,
+        ...desire,
+      });
+    }
+  },
+});
+
 // ─── Emotion functions ──────────────────────────────────────
 
 /** Get the agent's emotional state (public — DEBUG ONLY, no access control) */

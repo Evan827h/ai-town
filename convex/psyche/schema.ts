@@ -4,7 +4,7 @@ import { v } from 'convex/values';
 /**
  * Psyche tables use two ID types:
  * - agentNeeds, psycheDecisionLog, agentIntents: keyed by agent.id (GameId<'agents'>)
- * - agentRelationships, agentOpinions, agentEmotions: keyed by player.id (GameId<'players'>)
+ * - agentRelationships, agentOpinions, agentEmotions, agentDesires: keyed by player.id (GameId<'players'>)
  *
  * This split exists because needs/intents are agent-loop concerns (tied to the agent entity),
  * while relationships/opinions/emotions are identity concerns (tied to the player persona).
@@ -113,6 +113,18 @@ export const psycheTables = {
     valence: v.float64(), // -1..1
     arousal: v.float64(), // -1..1
     lastUpdated: v.float64(), // game-time timestamp
+  }).index('by_agent', ['worldId', 'agentId']),
+
+  // Emergent wants and fears that arise from reflection
+  agentDesires: defineTable({
+    worldId: v.id('worlds'),
+    agentId: v.string(), // player ID (like relationships/opinions/emotions)
+    type: v.string(), // 'want' | 'fear'
+    description: v.string(),
+    intensity: v.float64(),
+    tags: v.array(v.string()), // DesireTag[]
+    createdAt: v.float64(),
+    sourceMemoryIds: v.array(v.string()),
   }).index('by_agent', ['worldId', 'agentId']),
 
   // Directed relationship edges between agents

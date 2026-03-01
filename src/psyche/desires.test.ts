@@ -407,11 +407,8 @@ describe('mergeDesire', () => {
     const newDesire = makeDesire({
       id: 'n1',
       type: 'want',
-      tags: ['social', 'fun'],
-      // overlap = {social} / {social, friendship, fun} = 1/3 < 0.5 → won't merge
-      // Use higher overlap:
-      tags: ['social', 'friendship', 'fun'],
       // overlap = {social, friendship} / {social, friendship, fun} = 2/3 >= 0.5 → merge
+      tags: ['social', 'friendship', 'fun'],
       intensity: 0.7,
     });
     const result = mergeDesire(existing, newDesire);
