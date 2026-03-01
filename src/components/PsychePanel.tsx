@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import ReactModal from 'react-modal';
 import { api } from '../../convex/_generated/api';
@@ -12,6 +12,28 @@ import { NeedId } from '../psyche/registries';
 import { OPINION_TOPICS, OPINION_NEUTRAL } from '../psyche/data/opinions';
 import { getEmotionLabel } from '../psyche/emotions';
 import { NEUTRAL_THRESHOLD } from '../psyche/data/emotions';
+
+if (typeof window !== 'undefined') {
+  ReactModal.setAppElement('#root');
+}
+
+interface DecisionLogEntry {
+  _id: string;
+  timestamp: number;
+  chosenActionEmoji: string;
+  chosenActionName: string;
+  chosenScore: number;
+  location: string;
+  conflicts?: Array<{ actionId: string; penalty: number; values: string[] }>;
+  alternatives: Array<{ actionEmoji: string; actionName: string; score: number }>;
+  needsSnapshot: Array<{
+    needId: string;
+    currentValue: number;
+    maxValue: number;
+    isCritical: boolean;
+    urgencyScore?: number;
+  }>;
+}
 
 type MemoryFilter = 'all' | 'conversation' | 'reflection' | 'relationship';
 
@@ -59,6 +81,7 @@ export default function PsychePanel({
   // Memories modal state
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [memoryFilter, setMemoryFilter] = useState<MemoryFilter>('all');
+  const [showAllRelationships, setShowAllRelationships] = useState(false);
 
   // Only fetch memories when modal is open (no cost when closed)
   const memories = useQuery(
@@ -68,77 +91,83 @@ export default function PsychePanel({
 
   const playerName = game.playerDescriptions.get(playerId)?.name ?? 'Agent';
 
+  const sortedNeeds = useMemo(
+    () => (needs ? [...needs].sort((a, b) => a.currentValue - b.currentValue) : []),
+    [needs],
+  );
+
+  const sortedOpinions = useMemo(
+    () =>
+      opinions
+        ? [...opinions].sort(
+            (a, b) => Math.abs(b.value - OPINION_NEUTRAL) - Math.abs(a.value - OPINION_NEUTRAL),
+          )
+        : [],
+    [opinions],
+  );
+
+  const filteredMemories = useMemo(
+    () => memories?.filter((m) => memoryFilter === 'all' || m.data.type === memoryFilter),
+    [memories, memoryFilter],
+  );
+
   if (!agent || !agentId) {
     return null;
   }
 
-  const filteredMemories = memories?.filter(
-    (m) => memoryFilter === 'all' || m.data.type === memoryFilter,
-  );
+  const displayedRelationships = showAllRelationships
+    ? relationships
+    : relationships?.slice(0, 5);
 
   return (
     <div className="mt-4">
       {/* ─── Needs Section ─── */}
-      <div className="box">
-        <h2 className="bg-brown-700 p-2 font-display text-lg tracking-wider shadow-solid text-center">
-          Needs
-        </h2>
-      </div>
+      <SectionHeader title="Needs" />
       <div className="mt-2 space-y-2">
-        {needs && needs.length > 0 ? (
-          needs
-            .sort((a, b) => a.currentValue - b.currentValue) // most urgent first
-            .map((need) => {
-              const def = needRegistry.get(need.needId as NeedId);
-              if (!def) return null;
-              return (
-                <NeedBar
-                  key={need.needId}
-                  name={def.name}
-                  value={need.currentValue}
-                  maxValue={def.maxValue}
-                  criticalThreshold={def.criticalThreshold}
-                  weight={def.priorityWeight}
-                />
-              );
-            })
+        {needs === undefined ? (
+          <div className="text-sm text-brown-400 text-center py-2">Loading...</div>
+        ) : needs.length > 0 ? (
+          sortedNeeds.map((need) => {
+            const def = needRegistry.get(need.needId as NeedId);
+            if (!def) return null;
+            return (
+              <NeedBar
+                key={need.needId}
+                name={def.name}
+                value={need.currentValue}
+                maxValue={def.maxValue}
+                criticalThreshold={def.criticalThreshold}
+                weight={def.priorityWeight}
+              />
+            );
+          })
         ) : (
-          <div className="text-sm text-brown-300 text-center py-2">
-            Needs not initialized yet...
-          </div>
+          <div className="text-sm text-brown-300 text-center py-2">Not initialized yet...</div>
         )}
       </div>
 
       {/* ─── Opinions Section ─── */}
-      <div className="box mt-4">
-        <h2 className="bg-brown-700 p-2 font-display text-lg tracking-wider shadow-solid text-center">
-          Opinions
-        </h2>
-      </div>
+      <SectionHeader title="Opinions" className="mt-4" />
       <div className="mt-2 space-y-2">
-        {opinions && opinions.length > 0 ? (
-          [...opinions]
-            .sort((a, b) => Math.abs(b.value - OPINION_NEUTRAL) - Math.abs(a.value - OPINION_NEUTRAL))
-            .map((op) => {
-              const topic = OPINION_TOPICS.find((t) => t.id === op.topicId);
-              if (!topic) return null;
-              return (
-                <OpinionBar key={op.topicId} name={topic.name} value={op.value} />
-              );
-            })
+        {opinions === undefined ? (
+          <div className="text-sm text-brown-400 text-center py-2">Loading...</div>
+        ) : opinions.length > 0 ? (
+          sortedOpinions.map((op) => {
+            const topic = OPINION_TOPICS.find((t) => t.id === op.topicId);
+            if (!topic) return null;
+            return <OpinionBar key={op.topicId} name={topic.name} value={op.value} />;
+          })
         ) : (
-          <div className="text-sm text-brown-300 text-center py-2">No opinions yet...</div>
+          <div className="text-sm text-brown-300 text-center py-2">Not initialized yet...</div>
         )}
       </div>
 
       {/* ─── Emotion Section ─── */}
-      <div className="box mt-4">
-        <h2 className="bg-brown-700 p-2 font-display text-lg tracking-wider shadow-solid text-center">
-          Emotion
-        </h2>
-      </div>
+      <SectionHeader title="Emotion" className="mt-4" />
       <div className="mt-2">
-        {emotion ? (
+        {emotion === undefined ? (
+          <div className="text-sm text-brown-400 text-center py-2">Loading...</div>
+        ) : emotion ? (
           <EmotionIndicator valence={emotion.valence} arousal={emotion.arousal} />
         ) : (
           <div className="text-sm text-brown-300 text-center py-2">No emotional state yet...</div>
@@ -146,49 +175,55 @@ export default function PsychePanel({
       </div>
 
       {/* ─── Relationships Section ─── */}
-      <div className="box mt-4">
-        <h2 className="bg-brown-700 p-2 font-display text-lg tracking-wider shadow-solid text-center">
-          Relationships
-        </h2>
-      </div>
+      <SectionHeader title="Relationships" className="mt-4" />
       <div className="mt-2 space-y-3">
-        {relationships && relationships.length > 0 ? (
-          relationships.map((rel) => {
-            const targetName =
-              game.playerDescriptions.get(rel.toAgentId as GameId<'players'>)?.name ??
-              rel.toAgentId;
-            const timeSince = getTimeAgo(rel.lastInteraction);
-            return (
-              <RelationshipCard
-                key={rel.toAgentId}
-                targetName={targetName}
-                trust={rel.trust}
-                affinity={rel.affinity}
-                respect={rel.respect}
-                frequency={rel.frequency}
-                familiarity={rel.familiarity}
-                lastInteraction={timeSince}
-              />
-            );
-          })
+        {relationships === undefined ? (
+          <div className="text-sm text-brown-400 text-center py-2">Loading...</div>
+        ) : relationships.length > 0 ? (
+          <>
+            {displayedRelationships?.map((rel) => {
+              const targetName =
+                game.playerDescriptions.get(rel.toAgentId as GameId<'players'>)?.name ??
+                rel.toAgentId;
+              const timeSince = getTimeAgo(rel.lastInteraction);
+              return (
+                <RelationshipCard
+                  key={rel.toAgentId}
+                  targetName={targetName}
+                  trust={rel.trust}
+                  affinity={rel.affinity}
+                  respect={rel.respect}
+                  frequency={rel.frequency}
+                  familiarity={rel.familiarity}
+                  lastInteraction={timeSince}
+                />
+              );
+            })}
+            {relationships.length > 5 && !showAllRelationships && (
+              <button
+                onClick={() => setShowAllRelationships(true)}
+                className="w-full text-xs text-brown-400 hover:text-brown-200 py-1 cursor-pointer"
+              >
+                Show all {relationships.length} relationships
+              </button>
+            )}
+          </>
         ) : (
-          <div className="text-sm text-brown-300 text-center py-2">No relationships yet...</div>
+          <div className="text-sm text-brown-300 text-center py-2">Not initialized yet...</div>
         )}
       </div>
 
       {/* ─── Decision Log Section ─── */}
-      <div className="box mt-4">
-        <h2 className="bg-brown-700 p-2 font-display text-lg tracking-wider shadow-solid text-center">
-          Decisions
-        </h2>
-      </div>
+      <SectionHeader title="Decisions" className="mt-4" />
       <div className="mt-2 space-y-3">
-        {decisionLog && decisionLog.length > 0 ? (
+        {decisionLog === undefined ? (
+          <div className="text-sm text-brown-400 text-center py-2">Loading...</div>
+        ) : decisionLog.length > 0 ? (
           decisionLog.map((entry, i) => (
             <DecisionEntry key={entry._id} entry={entry} isLatest={i === 0} />
           ))
         ) : (
-          <div className="text-sm text-brown-300 text-center py-2">No decisions yet...</div>
+          <div className="text-sm text-brown-300 text-center py-2">Not initialized yet...</div>
         )}
       </div>
 
@@ -208,7 +243,6 @@ export default function PsychePanel({
         onRequestClose={() => setMemoriesOpen(false)}
         style={memoryModalStyles}
         contentLabel="Agent memories"
-        ariaHideApp={false}
       >
         <div className="font-body">
           <h2 className="font-display text-xl tracking-wider text-center mb-4">
@@ -303,7 +337,14 @@ function NeedBar({
           <span className="text-brown-600 ml-1">({weight.toFixed(1)}x)</span>
         </span>
       </div>
-      <div className={`w-full bg-brown-900 h-2.5 rounded-sm ${glowClass}`}>
+      <div
+        role="meter"
+        aria-valuenow={Math.round(value)}
+        aria-valuemin={0}
+        aria-valuemax={maxValue}
+        aria-label={`${name}: ${Math.round(value)} of ${maxValue}`}
+        className={`w-full bg-brown-900 h-2.5 rounded-sm ${glowClass}`}
+      >
         {/* Critical threshold marker */}
         <div className="relative w-full h-full">
           <div
@@ -351,7 +392,14 @@ function OpinionBar({ name, value }: { name: string; value: number }) {
           {label} ({Math.round(value)}/10)
         </span>
       </div>
-      <div className="w-full bg-brown-800 h-1.5 rounded-sm relative">
+      <div
+        role="meter"
+        aria-valuenow={Math.round(value)}
+        aria-valuemin={0}
+        aria-valuemax={10}
+        aria-label={`${name}: ${label} (${Math.round(value)}/10)`}
+        className="w-full bg-brown-800 h-1.5 rounded-sm relative"
+      >
         {/* Center line (neutral = 5) */}
         <div className="absolute top-0 h-full border-l border-brown-500" style={{ left: '50%' }} />
         {/* Value bar */}
@@ -434,26 +482,7 @@ function DecisionEntry({
   entry,
   isLatest,
 }: {
-  entry: {
-    timestamp: number;
-    chosenActionEmoji: string;
-    chosenActionName: string;
-    chosenScore: number;
-    location: string;
-    conflicts?: Array<{ actionId: string; penalty: number; values: string[] }>;
-    alternatives: {
-      actionEmoji: string;
-      actionName: string;
-      score: number;
-    }[];
-    needsSnapshot: {
-      needId: string;
-      currentValue: number;
-      maxValue: number;
-      isCritical: boolean;
-      urgencyScore?: number;
-    }[];
-  };
+  entry: DecisionLogEntry;
   isLatest: boolean;
 }) {
   const timeAgo = getTimeAgo(entry.timestamp);
@@ -620,7 +649,14 @@ function BipolarBar({ label, value }: { label: string; value: number }) {
           {Math.round(value)}
         </span>
       </div>
-      <div className="w-full bg-brown-800 h-1.5 rounded-sm relative">
+      <div
+        role="meter"
+        aria-valuenow={Math.round(value)}
+        aria-valuemin={-100}
+        aria-valuemax={100}
+        aria-label={`${label}: ${Math.round(value)}`}
+        className="w-full bg-brown-800 h-1.5 rounded-sm relative"
+      >
         {/* Center line */}
         <div className="absolute top-0 h-full border-l border-brown-500" style={{ left: '50%' }} />
         {/* Value bar */}
@@ -646,7 +682,14 @@ function UnipolarBar({ label, value }: { label: string; value: number }) {
         <span className="text-brown-300">{label}</span>
         <span className="text-brown-400 tabular-nums">{Math.round(value)}</span>
       </div>
-      <div className="w-full bg-brown-800 h-1.5 rounded-sm">
+      <div
+        role="meter"
+        aria-valuenow={Math.round(value)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${label}: ${Math.round(value)}`}
+        className="w-full bg-brown-800 h-1.5 rounded-sm"
+      >
         <div
           className={`h-full rounded-sm transition-all duration-500 ${barColor}`}
           style={{ width: `${percent}%` }}
@@ -699,6 +742,18 @@ function MemoryCard({
           {badge.label}
         </span>
       </div>
+    </div>
+  );
+}
+
+// ─── Section Header Component ─────────────────────────────────
+
+function SectionHeader({ title, className }: { title: string; className?: string }) {
+  return (
+    <div className={`box ${className ?? ''}`}>
+      <h2 className="bg-brown-700 p-2 font-display text-lg tracking-wider shadow-solid text-center">
+        {title}
+      </h2>
     </div>
   );
 }
