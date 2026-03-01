@@ -64,7 +64,12 @@ export async function rememberConversation(
   const llmMessages: LLMMessage[] = [
     {
       role: 'user',
-      content: `You are ${player.name}, and you just finished a conversation with ${otherPlayer.name}. I would like you to summarize the conversation from ${player.name}'s perspective, using first-person pronouns like "I," and add if you liked or disliked this interaction.
+      content: `You are ${player.name}, and you just finished a conversation with ${otherPlayer.name}. Summarize the conversation from ${player.name}'s perspective, using first-person pronouns like "I," and add if you liked or disliked this interaction.
+
+RULES:
+- Only include things that were actually said in the conversation below. Do not add details, plans, or promises that were not explicitly stated.
+- Do not speculate about future plans unless they were concretely discussed.
+- Keep the summary factual and brief (2-3 sentences).
 
 After your summary, on a new line, write exactly one of these labels to classify the interaction:
 OUTCOME: positive_social

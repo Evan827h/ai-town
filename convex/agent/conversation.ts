@@ -48,6 +48,7 @@ export async function startConversationMessage(
   const prompt = [
     `You are ${player.name}, and you just started a conversation with ${otherPlayer.name}.`,
   ];
+  prompt.push(...worldGroundingPrompt());
   prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
   prompt.push(...currentActivityPrompt(player, recentDecisions));
   prompt.push(...opinionPrompt(opinions));
@@ -56,7 +57,7 @@ export async function startConversationMessage(
   prompt.push(...relatedMemoriesPrompt(memories));
   if (memoryWithOtherPlayer) {
     prompt.push(
-      `Be sure to include some detail or question about a previous conversation in your greeting.`,
+      `You may briefly reference a specific detail from a previous conversation listed in your memories above. Only reference details that are actually written in your memories — do not make up things you might have discussed.`,
     );
   }
   const lastPrompt = `${player.name} to ${otherPlayer.name}:`;
@@ -112,6 +113,7 @@ export async function continueConversationMessage(
     `You are ${player.name}, and you're currently in a conversation with ${otherPlayer.name}.`,
     `The conversation started at ${started.toLocaleString()}. It's now ${new Date(now).toLocaleString()}.`,
   ];
+  prompt.push(...worldGroundingPrompt());
   prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
   prompt.push(...currentActivityPrompt(player, recentDecisions));
   prompt.push(...opinionPrompt(opinions));
@@ -167,6 +169,7 @@ export async function leaveConversationMessage(
     `You are ${player.name}, and you're currently in a conversation with ${otherPlayer.name}.`,
     `You've decided to leave the conversation and would like to politely tell them you're leaving the conversation.`,
   ];
+  prompt.push(...worldGroundingPrompt());
   prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
   prompt.push(...currentActivityPrompt(player, recentDecisions));
   prompt.push(...opinionPrompt(opinions));
@@ -239,15 +242,24 @@ function previousConversationPrompt(
 function relatedMemoriesPrompt(memories: memory.Memory[]): string[] {
   const prompt = [];
   if (memories.length > 0) {
-    prompt.push(`Here are some related memories in decreasing relevance order:`);
+    prompt.push(`Here are some of your memories in decreasing relevance order:`);
     for (const memory of memories) {
       prompt.push(' - ' + memory.description);
     }
+    prompt.push(
+      `When referencing past conversations, use ONLY details from the memories above. Do not invent or embellish details about things that were said or planned.`,
+    );
   }
   return prompt;
 }
 
 const locationNames: Record<string, string> = { home: 'Home', cafe: 'Cafe', park: 'Park' };
+
+function worldGroundingPrompt(): string[] {
+  return [
+    `IMPORTANT: You live in a small world with only three locations: Home (a building with rooms), the Cafe (a campfire gathering spot), and the Park (open grassland). There are no other places — no galleries, restaurants, shops, rooftops, or other buildings. Keep your conversation grounded in this world.`,
+  ];
+}
 
 function currentActivityPrompt(
   player: { position: { x: number; y: number } },
