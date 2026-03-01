@@ -19,7 +19,7 @@ import { serializedPlayer } from './player';
 import { scoreActions } from '../../src/psyche/scorer';
 import { depleteNeeds, applyActionEffects, initializeNeeds } from '../../src/psyche/needs';
 import { needRegistry } from '../../src/psyche/data/needs';
-import { getActionsForLocation } from '../../src/psyche/data/actions';
+import { getActionsForLocation, getAllActions } from '../../src/psyche/data/actions';
 import { getLocationAtPosition, getLocationDestination } from '../../src/psyche/data/locations';
 import { ActionEffect, AgentNeedState, AgentOpinion, EmotionalState, NeedId, RelationshipEdge, TopicId } from '../../src/psyche/registries';
 import {
@@ -493,15 +493,7 @@ async function scoreNextAction(
 
   const location = getLocationAtPosition(playerPosition);
 
-  // Gather all actions from all locations
-  const allActions = getActionsForLocation('*');
-  const cafeActions = getActionsForLocation('cafe');
-  const homeActions = getActionsForLocation('home');
-  const parkActions = getActionsForLocation('park');
-  const actionSet = new Map(
-    [...cafeActions, ...homeActions, ...parkActions, ...allActions].map((a) => [a.id, a]),
-  );
-  const allAvailableActions = [...actionSet.values()];
+  const allAvailableActions = getAllActions();
 
   const baseScored = scoreActions(agentNeeds, allAvailableActions, needRegistry);
 

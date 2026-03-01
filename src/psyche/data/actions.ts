@@ -231,23 +231,19 @@ const actionDefinitions: ActionDefinition[] = [
 export const actionRegistry: ActionRegistry = new Map(actionDefinitions.map((a) => [a.id, a]));
 
 /**
- * Location-to-action mapping.
- * Returns which actions are available at a given location type.
- * '*' matches any location (universal actions).
+ * Get actions available at a given location.
+ * Derives from each action's locationRequirement — no manual mapping needed.
+ * Returns location-specific actions + universal actions (no locationRequirement).
  */
-const locationActions: Record<string, string[]> = {
-  cafe: ['eat_at_cafe', 'socialize_at_cafe', 'people_watch', 'gossip_at_cafe', 'eavesdrop'],
-  home: ['sleep_at_home', 'nap', 'cook_at_home', 'play_game', 'skip_plans'],
-  park: ['exercise_at_park', 'rest_on_bench', 'read_at_park'],
-  '*': ['chat_with_nearby', 'wander'],
-};
-
 export function getActionsForLocation(location: string): ActionDefinition[] {
-  const locationSpecific = locationActions[location] ?? [];
-  const universal = locationActions['*'] ?? [];
-  const actionIds = [...locationSpecific, ...universal];
+  return [...actionRegistry.values()].filter(
+    (a) => a.locationRequirement === location || !a.locationRequirement,
+  );
+}
 
-  return actionIds
-    .map((id) => actionRegistry.get(id))
-    .filter((a): a is ActionDefinition => a !== undefined);
+/**
+ * Get all registered actions regardless of location.
+ */
+export function getAllActions(): ActionDefinition[] {
+  return [...actionRegistry.values()];
 }
