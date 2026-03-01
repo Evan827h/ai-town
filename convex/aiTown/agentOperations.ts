@@ -21,7 +21,7 @@ import { depleteNeeds, applyActionEffects, initializeNeeds } from '../../src/psy
 import { needRegistry } from '../../src/psyche/data/needs';
 import { getActionsForLocation, getAllActions } from '../../src/psyche/data/actions';
 import { getLocationAtPosition, getLocationDestination } from '../../src/psyche/data/locations';
-import { ActionEffect, AgentNeedState, AgentOpinion, EmotionalState, NeedId, RelationshipEdge, TopicId } from '../../src/psyche/registries';
+import { ActionEffect, AgentNeedState, AgentOpinion, Desire, DesireTag, EmotionalState, NeedId, RelationshipEdge, TopicId } from '../../src/psyche/registries';
 import {
   applyRelationshipModifiers,
   initializeRelationship,
@@ -46,6 +46,7 @@ import {
   OUTCOME_EMOTION_DELTAS,
 } from '../../src/psyche/data/emotions';
 import { actionRegistry } from '../../src/psyche/data/actions';
+import { applyDesireModifiers, decayDesires, pruneDesires } from '../../src/psyche/desires';
 
 /** Need effects applied when a conversation ends */
 const CONVERSATION_NEED_REPLENISHES: ActionEffect[] = [
@@ -535,7 +536,26 @@ async function scoreNextAction(
 
   if (scored.length === 0) return null;
 
-  return { scored, needs: agentNeeds, location, conflicts };
+  // Step 5d: Desire modifiers — wants/fears as tiebreakers
+  const desireDocs = await ctx.runQuery(internal.psyche.functions.getAgentDesiresInternal, {
+    worldId,
+    agentId: playerId, // desires keyed by player ID
+  });
+  let finalScored = scored;
+  if (desireDocs.length > 0) {
+    const desires: Desire[] = desireDocs.map((d: any) => ({
+      id: d._id,
+      type: d.type,
+      description: d.description,
+      intensity: d.intensity,
+      tags: d.tags as DesireTag[],
+      createdAt: d.createdAt,
+      sourceMemoryIds: d.sourceMemoryIds,
+    }));
+    finalScored = applyDesireModifiers(scored, desires);
+  }
+
+  return { scored: finalScored, needs: agentNeeds, location, conflicts };
 }
 
 export const agentDoSomething = internalAction({
@@ -767,6 +787,42 @@ export const agentDoSomething = internalAction({
       console.log(
         `[Psyche] ${emotionCharName ?? agent.id}: emotion ${preDecay.v.toFixed(2)}/${preDecay.a.toFixed(2)} → ${emotionState.valence.toFixed(2)}/${emotionState.arousal.toFixed(2)}${contagionStr}`,
       );
+    }
+
+    // Step 2.6: Desire decay
+    if (elapsedGameMinutes > 0) {
+      const desireDocsForDecay = await ctx.runQuery(internal.psyche.functions.getAgentDesiresInternal, {
+        worldId: args.worldId,
+        agentId: player.id,
+      });
+      if (desireDocsForDecay.length > 0) {
+        let desires: Desire[] = desireDocsForDecay.map((d: any) => ({
+          id: d._id,
+          type: d.type,
+          description: d.description,
+          intensity: d.intensity,
+          tags: d.tags as DesireTag[],
+          createdAt: d.createdAt,
+          sourceMemoryIds: d.sourceMemoryIds,
+        }));
+        const preCount = desires.length;
+        desires = decayDesires(desires, elapsedGameMinutes);
+        desires = pruneDesires(desires);
+        if (desires.length !== preCount || desires.some((d, i) => d.intensity !== desireDocsForDecay[i]?.intensity)) {
+          await ctx.runMutation(internal.psyche.functions.bulkUpdateDesires, {
+            worldId: args.worldId,
+            agentId: player.id,
+            desires: desires.map((d) => ({
+              type: d.type,
+              description: d.description,
+              intensity: d.intensity,
+              tags: d.tags,
+              createdAt: d.createdAt,
+              sourceMemoryIds: d.sourceMemoryIds,
+            })),
+          });
+        }
+      }
     }
 
     const location = getLocationAtPosition(player.position);
