@@ -8,7 +8,7 @@
  *   1. scoreActions()              — base scores from need urgency × action effects
  *   2. applyRelationshipModifiers() — social actions boosted/penalized by relationship quality
  *   3. applyMoralFilter()          — hard vetoes + soft penalties + conflict detection
- *   (Phase 4 will add: wants/fears as tiebreakers)
+ *   4. applyDesireModifiers()      — wants boost / fears penalize matching actions (±15% tiebreaker)
  */
 
 // ─── Registry ID Types (compile-time typo protection) ────
@@ -67,6 +67,8 @@ export interface ActionDefinition {
   moralCosts?: MoralTag[];
   /** Emotional shift when this action completes: { valence, arousal } deltas */
   emotionalEffects?: { valence: number; arousal: number };
+  /** Semantic tags for matching against desires (wants/fears) */
+  desireTags?: DesireTag[];
 }
 
 export interface ScoredAction {
@@ -191,6 +193,42 @@ export interface EmotionAnchor {
   label: string;
   valence: number;
   arousal: number;
+}
+
+// ─── Desire (Wants & Fears) Types ───────────────────────────
+
+/** Semantic tags for matching desires to actions. Both actions and LLM extraction use the same vocabulary. */
+export type DesireTag =
+  | 'social' | 'friendship' | 'respect' | 'solitude'
+  | 'rest' | 'food' | 'fun' | 'nature'
+  | 'creativity' | 'productivity' | 'safety' | 'exploration';
+
+export type DesireType = 'want' | 'fear';
+
+/**
+ * A want or fear that emerged from reflection.
+ * Wants boost actions with matching tags; fears penalize them.
+ */
+export interface Desire {
+  id: string;
+  type: DesireType;
+  /** Free-text description, e.g. "earn Maya's respect" */
+  description: string;
+  /** 0..1 — how strongly this desire influences scoring */
+  intensity: number;
+  /** Semantic tags for deterministic action matching */
+  tags: DesireTag[];
+  /** Game-time timestamp when this desire was created/last reinforced */
+  createdAt: number;
+  /** IDs of the reflection memories that spawned this desire */
+  sourceMemoryIds: string[];
+}
+
+/** Structured output from the LLM extraction call */
+export interface DesireExtraction {
+  wants: Array<{ description: string; intensity: number; tags: DesireTag[] }>;
+  fears: Array<{ description: string; intensity: number; tags: DesireTag[] }>;
+  opinionDeltas: Array<{ topicId: string; delta: number }>;
 }
 
 // ─── Location Zone Types ────────────────────────────────────
