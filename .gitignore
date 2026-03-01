@@ -51,5 +51,6 @@ CLAUDE.md
 
 /.worktree/
 .worktree
+.worktrees/
 
 vite.config.ts
