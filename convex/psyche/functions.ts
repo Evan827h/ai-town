@@ -3,7 +3,7 @@ import { query, internalMutation, internalQuery } from '../_generated/server';
 
 // ─── Queries (for frontend debug panel) ────────────────────────
 
-/** Get all need states for an agent (public — for debug UI) */
+/** Get all need states for an agent (public — DEBUG ONLY, no access control) */
 export const getAgentNeeds = query({
   args: {
     worldId: v.id('worlds'),
@@ -31,7 +31,7 @@ export const getAgentNeedsInternal = internalQuery({
   },
 });
 
-/** Get recent decision log entries for an agent (last 10) */
+/** Get recent decision log entries for an agent (public — DEBUG ONLY, no access control, last 10) */
 export const getDecisionLog = query({
   args: {
     worldId: v.id('worlds'),
@@ -177,7 +177,7 @@ export const clearAgentIntent = internalMutation({
 
 // ─── Opinion functions ───────────────────────────────────────
 
-/** Get all opinions for an agent (public — for debug UI) */
+/** Get all opinions for an agent (public — DEBUG ONLY, no access control) */
 export const getAgentOpinions = query({
   args: {
     worldId: v.id('worlds'),
@@ -276,7 +276,7 @@ export const updateAgentOpinions = internalMutation({
 
 // ─── Emotion functions ──────────────────────────────────────
 
-/** Get the agent's emotional state (public — for debug UI) */
+/** Get the agent's emotional state (public — DEBUG ONLY, no access control) */
 export const getAgentEmotion = query({
   args: {
     worldId: v.id('worlds'),
@@ -494,7 +494,7 @@ export const initializeRelationshipPair = internalMutation({
   },
 });
 
-/** Get all relationships for an agent (public — for debug UI) */
+/** Get all relationships for an agent (public — DEBUG ONLY, no access control) */
 export const getAgentRelationships = query({
   args: {
     worldId: v.id('worlds'),

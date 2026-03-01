@@ -3,6 +3,12 @@
  *
  * The engine is generic — it iterates over whatever entries exist in registries.
  * New world systems (economy, jobs, class) add data to registries, not logic to the engine.
+ *
+ * Scoring Pipeline Order (executed in agentOperations.ts):
+ *   1. scoreActions()              — base scores from need urgency × action effects
+ *   2. applyRelationshipModifiers() — social actions boosted/penalized by relationship quality
+ *   3. applyMoralFilter()          — hard vetoes + soft penalties + conflict detection
+ *   (Phase 4 will add: wants/fears as tiebreakers)
  */
 
 // ─── Registry ID Types (compile-time typo protection) ────

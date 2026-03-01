@@ -55,7 +55,11 @@ export const DEFAULT_OPINIONS: Record<TopicId, number> = Object.fromEntries(
 
 // ─── Outcome → Opinion Deltas ────────────────────────────────
 
-/** Maps interaction outcomes to opinion changes */
+/**
+ * Maps interaction outcomes to opinion changes.
+ * Currently only affects 'socializing' and 'work' topics.
+ * food, nature, rest are modified by future action-based opinion updates (Phase 4).
+ */
 export const OUTCOME_OPINION_DELTAS: Record<InteractionOutcome, OpinionDelta[]> = {
   positive_social: [{ topicId: 'socializing', delta: 0.3 }],
   negative_social: [{ topicId: 'socializing', delta: -0.5 }],

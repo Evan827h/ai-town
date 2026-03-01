@@ -9,6 +9,10 @@ import { ActionDefinition, ActionRegistry } from '../registries';
  *
  * locationRequirement maps to AI Town map locations.
  * 'any' or undefined = can be done anywhere.
+ *
+ * emotionalEffects use small deltas (max ±0.2). Conversation outcomes
+ * provide larger shifts (up to ±0.5). Monitor during playtesting — action
+ * emotion effects may need amplification if barely perceptible after decay.
  */
 
 const actionDefinitions: ActionDefinition[] = [
