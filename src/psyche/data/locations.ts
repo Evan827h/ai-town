@@ -50,6 +50,36 @@ const locationZones: LocationZone[] = [
     y1: 22,
     destination: { x: 50, y: 18 },
   },
+  {
+    id: 'waterfall',
+    name: 'Waterfall',
+    // West bank of river near waterfall — contemplative zone
+    x0: 17,
+    y0: 8,
+    x1: 23,
+    y1: 16,
+    destination: { x: 20, y: 12 },
+  },
+  {
+    id: 'meadow',
+    name: 'Meadow',
+    // Open grassland south of Home — flowers, stumps, mushrooms
+    x0: 5,
+    y0: 16,
+    x1: 18,
+    y1: 28,
+    destination: { x: 10, y: 22 },
+  },
+  {
+    id: 'workshop',
+    name: 'Workshop',
+    // Windmill area with crates — productive zone
+    x0: 28,
+    y0: 8,
+    x1: 40,
+    y1: 16,
+    destination: { x: 33, y: 12 },
+  },
 ];
 
 export const locationRegistry: LocationRegistry = new Map(

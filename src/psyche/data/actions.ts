@@ -208,6 +208,133 @@ const actionDefinitions: ActionDefinition[] = [
     emotionalEffects: { valence: -0.1, arousal: -0.1 },
   },
 
+  // === Waterfall actions ===
+  {
+    id: 'meditate_at_waterfall',
+    name: 'Meditate',
+    description: 'Meditating by the waterfall',
+    emoji: '🧘',
+    locationRequirement: 'waterfall',
+    duration: 25,
+    replenishes: [
+      { needId: 'comfort', amount: 30 },
+      { needId: 'energy', amount: 10 },
+    ],
+    costs: [],
+    emotionalEffects: { valence: 0.2, arousal: -0.25 },
+  },
+  {
+    id: 'fish_at_waterfall',
+    name: 'Fish',
+    description: 'Fishing by the waterfall',
+    emoji: '🎣',
+    locationRequirement: 'waterfall',
+    duration: 35,
+    replenishes: [
+      { needId: 'hunger', amount: 20 },
+      { needId: 'fun', amount: 15 },
+    ],
+    costs: [{ needId: 'energy', amount: 5 }],
+    emotionalEffects: { valence: 0.1, arousal: -0.15 },
+  },
+
+  // === Meadow actions ===
+  {
+    id: 'stargaze_in_meadow',
+    name: 'Stargaze',
+    description: 'Lying in the meadow gazing at the stars',
+    emoji: '✨',
+    locationRequirement: 'meadow',
+    duration: 30,
+    replenishes: [
+      { needId: 'fun', amount: 25 },
+      { needId: 'comfort', amount: 15 },
+    ],
+    costs: [],
+    emotionalEffects: { valence: 0.15, arousal: -0.2 },
+  },
+  {
+    id: 'forage_in_meadow',
+    name: 'Forage',
+    description: 'Foraging for berries and herbs in the meadow',
+    emoji: '🌿',
+    locationRequirement: 'meadow',
+    duration: 20,
+    replenishes: [
+      { needId: 'hunger', amount: 15 },
+      { needId: 'fun', amount: 10 },
+    ],
+    costs: [],
+    emotionalEffects: { valence: 0.1, arousal: 0.05 },
+  },
+  {
+    id: 'pick_flowers',
+    name: 'Pick Flowers',
+    description: 'Picking wildflowers in the meadow',
+    emoji: '💐',
+    locationRequirement: 'meadow',
+    duration: 15,
+    replenishes: [
+      { needId: 'fun', amount: 10 },
+      { needId: 'social', amount: 10 },
+    ],
+    costs: [],
+    socialWeights: { affinity: 0.6, familiarity: 0.4 },
+    emotionalEffects: { valence: 0.2, arousal: 0.05 },
+  },
+
+  // === Workshop actions ===
+  {
+    id: 'craft_at_workshop',
+    name: 'Craft',
+    description: 'Crafting something at the workshop',
+    emoji: '🔨',
+    locationRequirement: 'workshop',
+    duration: 30,
+    replenishes: [
+      { needId: 'fun', amount: 20 },
+      { needId: 'comfort', amount: 5 },
+    ],
+    costs: [{ needId: 'energy', amount: 10 }],
+    emotionalEffects: { valence: 0.15, arousal: 0.1 },
+  },
+  {
+    id: 'help_at_workshop',
+    name: 'Help Out',
+    description: 'Helping someone with their project at the workshop',
+    emoji: '🤝',
+    locationRequirement: 'workshop',
+    duration: 25,
+    replenishes: [
+      { needId: 'social', amount: 25 },
+      { needId: 'fun', amount: 5 },
+    ],
+    costs: [
+      { needId: 'energy', amount: 10 },
+      { needId: 'hunger', amount: 5 },
+    ],
+    socialWeights: { trust: 0.4, respect: 0.3, affinity: 0.3 },
+    emotionalEffects: { valence: 0.1, arousal: 0.05 },
+  },
+  {
+    id: 'snoop_at_workshop',
+    name: 'Snoop Around',
+    description: 'Snooping around the workshop',
+    emoji: '👀',
+    locationRequirement: 'workshop',
+    duration: 15,
+    replenishes: [
+      { needId: 'fun', amount: 15 },
+      { needId: 'social', amount: 5 },
+    ],
+    costs: [],
+    moralCosts: [
+      { moralValueId: 'fairness', severity: 0.4 },
+      { moralValueId: 'loyalty', severity: 0.3 },
+    ],
+    emotionalEffects: { valence: 0.05, arousal: 0.2 },
+  },
+
   // === Universal actions ===
   {
     id: 'chat_with_nearby',

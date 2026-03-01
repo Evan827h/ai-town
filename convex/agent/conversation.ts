@@ -253,11 +253,11 @@ function relatedMemoriesPrompt(memories: memory.Memory[]): string[] {
   return prompt;
 }
 
-const locationNames: Record<string, string> = { home: 'Home', cafe: 'Cafe', park: 'Park' };
+const locationNames: Record<string, string> = { home: 'Home', cafe: 'Cafe', park: 'Park', waterfall: 'Waterfall', meadow: 'Meadow', workshop: 'Workshop' };
 
 function worldGroundingPrompt(): string[] {
   return [
-    `IMPORTANT: You live in a small world with only three locations: Home (a building with rooms), the Cafe (a campfire gathering spot), and the Park (open grassland). There are no other places — no galleries, restaurants, shops, rooftops, or other buildings. Keep your conversation grounded in this world.`,
+    `IMPORTANT: You live in a small world with six locations: Home (a building with rooms), the Cafe (a campfire gathering spot), the Park (open grassland), the Waterfall (a peaceful spot by the river), the Meadow (an open field with wildflowers), and the Workshop (a windmill area with tools and crates). There are no other places — no galleries, restaurants, shops, rooftops, or other buildings. Keep your conversation grounded in this world.`,
   ];
 }
 

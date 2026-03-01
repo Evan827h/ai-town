@@ -15,7 +15,7 @@
 export type NeedId = 'hunger' | 'energy' | 'social' | 'comfort' | 'fun';
 export type MoralValueId = 'honesty' | 'loyalty' | 'fairness' | 'care' | 'authority' | 'liberty' | 'tradition';
 export type TopicId = 'food' | 'socializing' | 'nature' | 'work' | 'rest';
-export type LocationId = 'home' | 'cafe' | 'park';
+export type LocationId = 'home' | 'cafe' | 'park' | 'waterfall' | 'meadow' | 'workshop';
 
 export interface NeedDefinition {
   id: NeedId;
