@@ -251,6 +251,37 @@ describe('edge cases', () => {
     expect(result[0].score).toBe(0);
   });
 
+  test('skips needs with maxValue === 0 (no NaN propagation)', () => {
+    const zeroMaxNeedDefs: NeedRegistry = new Map([
+      [
+        'hunger' as NeedId,
+        {
+          id: 'hunger' as NeedId,
+          name: 'Hunger',
+          maxValue: 0,
+          depletionRate: 0.15,
+          priorityWeight: 1.2,
+          criticalThreshold: 20,
+        },
+      ],
+    ]);
+    const needs: AgentNeedState[] = [
+      { needId: 'hunger' as NeedId, currentValue: 50, lastUpdated: 0 },
+    ];
+    const action: ActionDefinition = {
+      id: 'eat',
+      name: 'Eat',
+      description: 'Eating food',
+      emoji: '🍽️',
+      duration: 30,
+      replenishes: [{ needId: 'hunger' as NeedId, amount: 40 }],
+      costs: [{ needId: 'hunger' as NeedId, amount: 5 }],
+    };
+    const result = scoreActionsDeterministic(needs, [action], zeroMaxNeedDefs);
+    expect(result[0].score).toBe(0);
+    expect(Number.isNaN(result[0].score)).toBe(false);
+  });
+
   test('action with no effects scores zero', () => {
     const noopAction: ActionDefinition = {
       id: 'noop',

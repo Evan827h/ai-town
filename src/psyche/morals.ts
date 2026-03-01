@@ -62,7 +62,7 @@ export function applyMoralFilter(
 
     if (vetoed) continue;
 
-    const adjustedScore = sa.score * (1 - totalPenalty);
+    const adjustedScore = sa.score * Math.max(0, 1 - totalPenalty);
 
     if (totalPenalty > profile.conflictThreshold) {
       conflicts.push({

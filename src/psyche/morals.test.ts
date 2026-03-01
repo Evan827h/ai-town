@@ -182,6 +182,40 @@ describe('applyMoralFilter', () => {
     });
   });
 
+  describe('penalty clamping', () => {
+    test('clamps totalPenalty so adjusted score never goes negative', () => {
+      // Profile where both honesty and loyalty have weight 0.7
+      // Two moral costs each with severity 0.8
+      // effectiveSeverity = 0.8 × 0.7 = 0.56 each (below hardVeto 0.85)
+      // totalPenalty = 0.56 + 0.56 = 1.12 (exceeds 1.0)
+      // Without clamp: score × (1 - 1.12) = 100 × -0.12 = -12 (negative!)
+      // With clamp: score × max(0, 1 - 1.12) = 100 × 0 = 0
+      const heavyMoralProfile = {
+        weights: {
+          honesty: 0.7,
+          loyalty: 0.7,
+          fairness: 0,
+          care: 0,
+          authority: 0,
+          liberty: 0,
+          tradition: 0,
+        } as Record<MoralValueId, number>,
+        hardVetoThreshold: 0.85,
+        conflictThreshold: 0.40,
+      };
+      const actions = [
+        makeAction('double_bad', 100, [
+          { moralValueId: 'honesty', severity: 0.8 },
+          { moralValueId: 'loyalty', severity: 0.8 },
+        ]),
+      ];
+      const { actions: filtered } = applyMoralFilter(actions, heavyMoralProfile);
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].score).toBe(0);
+      expect(filtered[0].score).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe('output ordering', () => {
     test('returns actions sorted by adjusted score descending', () => {
       // Alex honesty weight 0.6, gossip severity 0.6 → effectiveSeverity 0.36, score 100×0.64=64
