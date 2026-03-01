@@ -96,6 +96,8 @@ export function decayFrequency(
  * Uses the action's socialWeights to blend relationship dimensions.
  * Returns a value roughly in -100..100 range.
  */
+const RELATIONSHIP_DIMENSIONS = ['trust', 'affinity', 'respect', 'frequency', 'familiarity'] as const;
+
 function compositeRelationshipScore(
   edge: RelationshipEdge,
   weights: SocialWeights,
@@ -103,25 +105,12 @@ function compositeRelationshipScore(
   let score = 0;
   let totalWeight = 0;
 
-  if (weights.trust) {
-    score += edge.trust * weights.trust;
-    totalWeight += weights.trust;
-  }
-  if (weights.affinity) {
-    score += edge.affinity * weights.affinity;
-    totalWeight += weights.affinity;
-  }
-  if (weights.respect) {
-    score += edge.respect * weights.respect;
-    totalWeight += weights.respect;
-  }
-  if (weights.frequency) {
-    score += edge.frequency * weights.frequency;
-    totalWeight += weights.frequency;
-  }
-  if (weights.familiarity) {
-    score += edge.familiarity * weights.familiarity;
-    totalWeight += weights.familiarity;
+  for (const dim of RELATIONSHIP_DIMENSIONS) {
+    const w = weights[dim];
+    if (w) {
+      score += edge[dim] * w;
+      totalWeight += w;
+    }
   }
 
   // Normalize by total weight so scale is consistent regardless of how many dims are used
@@ -184,46 +173,6 @@ export function applyRelationshipModifiers(
  *
  * Returns a normalized 0..1 score.
  */
-// ─── Conversation Outcome Parsing ───────────────────────────
-
-/** Valid outcomes the LLM can classify a conversation as */
-const VALID_OUTCOMES: Set<InteractionOutcome> = new Set([
-  'positive_social',
-  'negative_social',
-  'helpful',
-  'betrayal',
-  'impressive',
-  'neutral',
-]);
-
-/**
- * Parse an OUTCOME: label from LLM conversation summary output.
- * Returns the cleaned text (label stripped) and the parsed outcome.
- * Falls back to 'positive_social' if no valid outcome is found.
- */
-export function parseConversationOutcome(llmOutput: string): {
-  cleanText: string;
-  outcome: InteractionOutcome;
-} {
-  const pattern = /\n?\s*OUTCOME:\s*(\S+)\s*$/i;
-  const match = llmOutput.match(pattern);
-
-  if (match) {
-    const candidate = match[1].toLowerCase() as InteractionOutcome;
-    if (VALID_OUTCOMES.has(candidate)) {
-      return {
-        cleanText: llmOutput.replace(pattern, '').trim(),
-        outcome: candidate,
-      };
-    }
-  }
-
-  return {
-    cleanText: llmOutput.trim(),
-    outcome: 'positive_social',
-  };
-}
-
 export function conversationPreferenceScore(
   edge: RelationshipEdge,
   elapsedGameMinutes: number,
@@ -240,3 +189,7 @@ export function conversationPreferenceScore(
   // Weight affinity more than frequency (60/40)
   return affinityNorm * 0.6 + frequencyNorm * 0.4;
 }
+
+// ─── Re-exports ─────────────────────────────────────────────
+
+export { parseConversationOutcome } from './parsing';
