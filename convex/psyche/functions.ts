@@ -588,7 +588,7 @@ export const logDecision = internalMutation({
         currentValue: v.float64(),
         maxValue: v.float64(),
         isCritical: v.boolean(),
-        urgencyScore: v.float64(),
+        urgencyScore: v.optional(v.float64()),
       }),
     ),
     location: v.string(),
@@ -616,5 +616,18 @@ export const logDecision = internalMutation({
       location: args.location,
       conflicts: args.conflicts,
     });
+
+    // Cleanup: keep only the latest 50 entries per agent
+    const allEntries = await ctx.db
+      .query('psycheDecisionLog')
+      .withIndex('by_agent', (q) => q.eq('worldId', args.worldId).eq('agentId', args.agentId))
+      .order('desc')
+      .collect();
+
+    if (allEntries.length > 50) {
+      for (const old of allEntries.slice(50)) {
+        await ctx.db.delete(old._id);
+      }
+    }
   },
 });
