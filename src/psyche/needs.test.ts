@@ -85,6 +85,13 @@ describe('depleteNeeds', () => {
     expect(hunger.currentValue).toBe(50);
   });
 
+  test('returns unchanged needs for negative elapsed time', () => {
+    const needs: AgentNeedState[] = [{ needId: 'hunger' as NeedId, currentValue: 80, lastUpdated: 0 }];
+    const result = depleteNeeds(needs, -5, testNeedDefs, 100);
+    expect(result[0].currentValue).toBe(80);
+    expect(result[0].lastUpdated).toBe(0); // unchanged
+  });
+
   test('ignores needs not in registry', () => {
     const needs: AgentNeedState[] = [
       { needId: 'unknown_need' as NeedId, currentValue: 50, lastUpdated: 0 },

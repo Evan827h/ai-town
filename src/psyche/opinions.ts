@@ -107,6 +107,6 @@ function getAttitudeLabel(value: number): string | null {
   if (value >= 7) return 'positively';
   if (value <= 2) return 'very negatively';
   if (value <= 4) return 'negatively';
-  // 4.5–6 range: near-neutral, omit
+  // 4.01–6.99 range: near-neutral, omit
   return null;
 }

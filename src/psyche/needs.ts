@@ -24,6 +24,8 @@ export function depleteNeeds(
   needDefs: NeedRegistry,
   currentGameTime: number,
 ): AgentNeedState[] {
+  if (elapsedGameMinutes <= 0) return needs;
+
   return needs.map((need) => {
     const def = needDefs.get(need.needId);
     if (!def) return need;

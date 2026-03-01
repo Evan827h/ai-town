@@ -29,6 +29,7 @@ export function decayEmotion(
   state: EmotionalState,
   elapsedGameMinutes: number,
   baseline: { valence: number; arousal: number },
+  gameTime?: number,
 ): EmotionalState {
   if (elapsedGameMinutes <= 0) return state;
 
@@ -38,7 +39,7 @@ export function decayEmotion(
   return {
     valence: baseline.valence + (state.valence - baseline.valence) * valenceDecay,
     arousal: baseline.arousal + (state.arousal - baseline.arousal) * arousalDecay,
-    lastUpdated: state.lastUpdated + elapsedGameMinutes,
+    lastUpdated: gameTime ?? state.lastUpdated + elapsedGameMinutes,
   };
 }
 

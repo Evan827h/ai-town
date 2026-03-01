@@ -104,6 +104,19 @@ describe('decayEmotion', () => {
     // lastUpdated should advance by elapsed time
     expect(result.lastUpdated).toBe(160);
   });
+
+  test('uses explicit gameTime when provided', () => {
+    const state: EmotionalState = { valence: 0.8, arousal: 0.6, lastUpdated: 1000 };
+    const result = decayEmotion(state, 60, baseline, 2000);
+    expect(result.lastUpdated).toBe(2000);
+    expect(result.valence).toBeLessThan(0.8);
+  });
+
+  test('falls back to elapsed increment without gameTime', () => {
+    const state: EmotionalState = { valence: 0.8, arousal: 0.6, lastUpdated: 1000 };
+    const result = decayEmotion(state, 60, baseline);
+    expect(result.lastUpdated).toBe(1060); // 1000 + 60
+  });
 });
 
 // ─── applyEmotionDelta ──────────────────────────────────────
