@@ -90,209 +90,214 @@ export const agentRememberConversation = internalAction({
       args.conversationId as GameId<'conversations'>,
     );
 
-    // rememberConversation returns null if conversation wasn't archived yet
-    const outcome = result?.outcome ?? 'positive_social';
-    const messageCount = result?.messageCount ?? 0;
+    // rememberConversation returns null if conversation wasn't archived yet.
+    // When null, skip all psyche updates — we have no LLM-determined outcome,
+    // and defaulting would create phantom positive reinforcement.
+    if (result) {
+      const { outcome, messageCount } = result;
 
-    // ─── Update relationship after conversation ────────────
-    const participants = await ctx.runQuery(internal.psyche.functions.getConversationParticipants, {
-      worldId: args.worldId,
-      playerId: args.playerId,
-      conversationId: args.conversationId,
-    });
-
-    if (participants) {
-      const { otherPlayerId, myName, otherName } = participants;
-      const now = Date.now();
-
-      // Fetch existing edges (may be null for first meeting)
-      const myEdge = await ctx.runQuery(internal.psyche.functions.getRelationship, {
+      // ─── Update relationship after conversation ────────────
+      const participants = await ctx.runQuery(internal.psyche.functions.getConversationParticipants, {
         worldId: args.worldId,
-        fromAgentId: args.playerId,
-        toAgentId: otherPlayerId,
+        playerId: args.playerId,
+        conversationId: args.conversationId,
       });
 
-      if (myEdge) {
-        // Existing relationship — update with LLM-determined outcome
-        const asEdge: RelationshipEdge = {
-          fromAgentId: myEdge.fromAgentId,
-          toAgentId: myEdge.toAgentId,
-          trust: myEdge.trust,
-          affinity: myEdge.affinity,
-          respect: myEdge.respect,
-          frequency: myEdge.frequency,
-          familiarity: myEdge.familiarity,
-          lastInteraction: myEdge.lastInteraction,
-        };
-        const updated = updateRelationship(asEdge, outcome, now);
-        await ctx.runMutation(internal.psyche.functions.upsertRelationship, {
+      if (participants) {
+        const { otherPlayerId, myName, otherName } = participants;
+        const now = Date.now();
+
+        // Fetch existing edges (may be null for first meeting)
+        const myEdge = await ctx.runQuery(internal.psyche.functions.getRelationship, {
           worldId: args.worldId,
           fromAgentId: args.playerId,
           toAgentId: otherPlayerId,
-          trust: updated.trust,
-          affinity: updated.affinity,
-          respect: updated.respect,
-          frequency: updated.frequency,
-          familiarity: updated.familiarity,
-          lastInteraction: updated.lastInteraction,
         });
-      } else {
-        // First meeting — initialize from dispositions then apply outcome
-        const myDisp = CHARACTER_DISPOSITIONS[myName] ?? DEFAULT_DISPOSITION;
-        const freshEdge = initializeRelationship(myDisp, args.playerId, otherPlayerId, now);
-        const updated = updateRelationship(freshEdge, outcome, now);
-        await ctx.runMutation(internal.psyche.functions.upsertRelationship, {
-          worldId: args.worldId,
-          fromAgentId: args.playerId,
-          toAgentId: otherPlayerId,
-          trust: updated.trust,
-          affinity: updated.affinity,
-          respect: updated.respect,
-          frequency: updated.frequency,
-          familiarity: updated.familiarity,
-          lastInteraction: updated.lastInteraction,
-        });
-      }
 
-      console.log(
-        `[Psyche] ${myName} (${args.playerId}): updated relationship with ${otherName} (${otherPlayerId}) — ${outcome} (LLM-determined, ${messageCount} messages)`,
-      );
-
-      // ─── Apply conversation need effects ────────────────
-      const needDocs = await ctx.runQuery(internal.psyche.functions.getAgentNeedsInternal, {
-        worldId: args.worldId,
-        agentId: args.agentId,
-      });
-
-      if (needDocs.length > 0) {
-        const agentNeeds: AgentNeedState[] = needDocs.map(
-          (d: { needId: string; currentValue: number; lastUpdated: number }) => ({
-            needId: d.needId as NeedId,
-            currentValue: d.currentValue,
-            lastUpdated: d.lastUpdated,
-          }),
-        );
-
-        const updatedNeeds = applyActionEffects(
-          agentNeeds,
-          CONVERSATION_NEED_REPLENISHES,
-          CONVERSATION_NEED_COSTS,
-          needRegistry,
-          now,
-        );
-
-        await ctx.runMutation(internal.psyche.functions.updateAgentNeeds, {
-          worldId: args.worldId,
-          agentId: args.agentId,
-          needs: updatedNeeds.map((n) => ({
-            needId: n.needId,
-            currentValue: n.currentValue,
-            lastUpdated: n.lastUpdated,
-          })),
-        });
+        if (myEdge) {
+          // Existing relationship — update with LLM-determined outcome
+          const asEdge: RelationshipEdge = {
+            fromAgentId: myEdge.fromAgentId,
+            toAgentId: myEdge.toAgentId,
+            trust: myEdge.trust,
+            affinity: myEdge.affinity,
+            respect: myEdge.respect,
+            frequency: myEdge.frequency,
+            familiarity: myEdge.familiarity,
+            lastInteraction: myEdge.lastInteraction,
+          };
+          const updated = updateRelationship(asEdge, outcome, now);
+          await ctx.runMutation(internal.psyche.functions.upsertRelationship, {
+            worldId: args.worldId,
+            fromAgentId: args.playerId,
+            toAgentId: otherPlayerId,
+            trust: updated.trust,
+            affinity: updated.affinity,
+            respect: updated.respect,
+            frequency: updated.frequency,
+            familiarity: updated.familiarity,
+            lastInteraction: updated.lastInteraction,
+          });
+        } else {
+          // First meeting — initialize from dispositions then apply outcome
+          const myDisp = CHARACTER_DISPOSITIONS[myName] ?? DEFAULT_DISPOSITION;
+          const freshEdge = initializeRelationship(myDisp, args.playerId, otherPlayerId, now);
+          const updated = updateRelationship(freshEdge, outcome, now);
+          await ctx.runMutation(internal.psyche.functions.upsertRelationship, {
+            worldId: args.worldId,
+            fromAgentId: args.playerId,
+            toAgentId: otherPlayerId,
+            trust: updated.trust,
+            affinity: updated.affinity,
+            respect: updated.respect,
+            frequency: updated.frequency,
+            familiarity: updated.familiarity,
+            lastInteraction: updated.lastInteraction,
+          });
+        }
 
         console.log(
-          `[Psyche] ${myName} (${args.playerId}): conversation needs updated — social +20, fun +8, energy -3`,
+          `[Psyche] ${myName} (${args.playerId}): updated relationship with ${otherName} (${otherPlayerId}) — ${outcome} (LLM-determined, ${messageCount} messages)`,
         );
-      }
 
-      // ─── Update opinions after conversation ────────────────
-      const opinionDeltas = OUTCOME_OPINION_DELTAS[outcome];
-      if (opinionDeltas.length > 0) {
-        const opinionDocs = await ctx.runQuery(internal.psyche.functions.getAgentOpinionsInternal, {
+        // ─── Apply conversation need effects ────────────────
+        const needDocs = await ctx.runQuery(internal.psyche.functions.getAgentNeedsInternal, {
           worldId: args.worldId,
-          agentId: args.playerId,
+          agentId: args.agentId,
         });
 
-        let opinions: AgentOpinion[];
-        if (opinionDocs.length > 0) {
-          opinions = opinionDocs.map(
-            (d: { topicId: string; value: number; lastUpdated: number }) => ({
-              topicId: d.topicId as TopicId,
-              value: d.value,
+        if (needDocs.length > 0) {
+          const agentNeeds: AgentNeedState[] = needDocs.map(
+            (d: { needId: string; currentValue: number; lastUpdated: number }) => ({
+              needId: d.needId as NeedId,
+              currentValue: d.currentValue,
               lastUpdated: d.lastUpdated,
             }),
           );
-        } else {
-          // Lazy-initialize from character defaults
-          const defaults = CHARACTER_OPINIONS[myName] ?? DEFAULT_OPINIONS;
-          opinions = Object.entries(defaults).map(([topicId, value]) => ({
-            topicId: topicId as TopicId,
-            value,
-            lastUpdated: now,
-          }));
-          await ctx.runMutation(internal.psyche.functions.initializeAgentOpinions, {
+
+          const updatedNeeds = applyActionEffects(
+            agentNeeds,
+            CONVERSATION_NEED_REPLENISHES,
+            CONVERSATION_NEED_COSTS,
+            needRegistry,
+            now,
+          );
+
+          await ctx.runMutation(internal.psyche.functions.updateAgentNeeds, {
+            worldId: args.worldId,
+            agentId: args.agentId,
+            needs: updatedNeeds.map((n) => ({
+              needId: n.needId,
+              currentValue: n.currentValue,
+              lastUpdated: n.lastUpdated,
+            })),
+          });
+
+          console.log(
+            `[Psyche] ${myName} (${args.playerId}): conversation needs updated — social +20, fun +8, energy -3`,
+          );
+        }
+
+        // ─── Update opinions after conversation ────────────────
+        const opinionDeltas = OUTCOME_OPINION_DELTAS[outcome];
+        if (opinionDeltas.length > 0) {
+          const opinionDocs = await ctx.runQuery(internal.psyche.functions.getAgentOpinionsInternal, {
             worldId: args.worldId,
             agentId: args.playerId,
-            opinions: opinions.map((o) => ({
+          });
+
+          let opinions: AgentOpinion[];
+          if (opinionDocs.length > 0) {
+            opinions = opinionDocs.map(
+              (d: { topicId: string; value: number; lastUpdated: number }) => ({
+                topicId: d.topicId as TopicId,
+                value: d.value,
+                lastUpdated: d.lastUpdated,
+              }),
+            );
+          } else {
+            // Lazy-initialize from character defaults
+            const defaults = CHARACTER_OPINIONS[myName] ?? DEFAULT_OPINIONS;
+            opinions = Object.entries(defaults).map(([topicId, value]) => ({
+              topicId: topicId as TopicId,
+              value,
+              lastUpdated: now,
+            }));
+            await ctx.runMutation(internal.psyche.functions.initializeAgentOpinions, {
+              worldId: args.worldId,
+              agentId: args.playerId,
+              opinions: opinions.map((o) => ({
+                topicId: o.topicId,
+                value: o.value,
+                lastUpdated: o.lastUpdated,
+              })),
+            });
+          }
+
+          const updatedOpinions = applyOpinionDeltas(opinions, opinionDeltas, now);
+          await ctx.runMutation(internal.psyche.functions.updateAgentOpinions, {
+            worldId: args.worldId,
+            agentId: args.playerId,
+            opinions: updatedOpinions.map((o) => ({
               topicId: o.topicId,
               value: o.value,
               lastUpdated: o.lastUpdated,
             })),
           });
+
+          const deltaStr = opinionDeltas
+            .map((d) => `${d.topicId} ${d.delta > 0 ? '+' : ''}${d.delta}`)
+            .join(', ');
+          console.log(
+            `[Psyche] ${myName}: opinions updated — ${outcome} → ${deltaStr}`,
+          );
         }
 
-        const updatedOpinions = applyOpinionDeltas(opinions, opinionDeltas, now);
-        await ctx.runMutation(internal.psyche.functions.updateAgentOpinions, {
-          worldId: args.worldId,
-          agentId: args.playerId,
-          opinions: updatedOpinions.map((o) => ({
-            topicId: o.topicId,
-            value: o.value,
-            lastUpdated: o.lastUpdated,
-          })),
-        });
+        // ─── Update emotion after conversation ────────────────
+        const emotionDelta = OUTCOME_EMOTION_DELTAS[outcome];
+        if (emotionDelta.valence !== 0 || emotionDelta.arousal !== 0) {
+          const convEmotionProfile = CHARACTER_EMOTIONS[myName] ?? DEFAULT_EMOTIONAL_PROFILE;
 
-        const deltaStr = opinionDeltas
-          .map((d) => `${d.topicId} ${d.delta > 0 ? '+' : ''}${d.delta}`)
-          .join(', ');
-        console.log(
-          `[Psyche] ${myName}: opinions updated — ${outcome} → ${deltaStr}`,
-        );
-      }
-
-      // ─── Update emotion after conversation ────────────────
-      const emotionDelta = OUTCOME_EMOTION_DELTAS[outcome];
-      if (emotionDelta.valence !== 0 || emotionDelta.arousal !== 0) {
-        const convEmotionProfile = CHARACTER_EMOTIONS[myName] ?? DEFAULT_EMOTIONAL_PROFILE;
-
-        let convEmotionDoc = await ctx.runQuery(internal.psyche.functions.getAgentEmotionInternal, {
-          worldId: args.worldId,
-          agentId: args.playerId,
-        });
-
-        let convEmotion: EmotionalState;
-        if (convEmotionDoc) {
-          convEmotion = {
-            valence: convEmotionDoc.valence,
-            arousal: convEmotionDoc.arousal,
-            lastUpdated: convEmotionDoc.lastUpdated,
-          };
-        } else {
-          // Lazy-initialize from character baseline
-          convEmotion = initializeEmotion(convEmotionProfile, now);
-          await ctx.runMutation(internal.psyche.functions.initializeAgentEmotion, {
+          let convEmotionDoc = await ctx.runQuery(internal.psyche.functions.getAgentEmotionInternal, {
             worldId: args.worldId,
             agentId: args.playerId,
-            valence: convEmotion.valence,
-            arousal: convEmotion.arousal,
-            lastUpdated: convEmotion.lastUpdated,
           });
+
+          let convEmotion: EmotionalState;
+          if (convEmotionDoc) {
+            convEmotion = {
+              valence: convEmotionDoc.valence,
+              arousal: convEmotionDoc.arousal,
+              lastUpdated: convEmotionDoc.lastUpdated,
+            };
+          } else {
+            // Lazy-initialize from character baseline
+            convEmotion = initializeEmotion(convEmotionProfile, now);
+            await ctx.runMutation(internal.psyche.functions.initializeAgentEmotion, {
+              worldId: args.worldId,
+              agentId: args.playerId,
+              valence: convEmotion.valence,
+              arousal: convEmotion.arousal,
+              lastUpdated: convEmotion.lastUpdated,
+            });
+          }
+
+          const updatedEmotion = applyEmotionDelta(convEmotion, emotionDelta, now);
+          await ctx.runMutation(internal.psyche.functions.updateAgentEmotion, {
+            worldId: args.worldId,
+            agentId: args.playerId,
+            valence: updatedEmotion.valence,
+            arousal: updatedEmotion.arousal,
+            lastUpdated: updatedEmotion.lastUpdated,
+          });
+
+          console.log(
+            `[Psyche] ${myName}: emotion after conversation — ${outcome} → valence ${emotionDelta.valence >= 0 ? '+' : ''}${emotionDelta.valence}, arousal ${emotionDelta.arousal >= 0 ? '+' : ''}${emotionDelta.arousal}`,
+          );
         }
-
-        const updatedEmotion = applyEmotionDelta(convEmotion, emotionDelta, now);
-        await ctx.runMutation(internal.psyche.functions.updateAgentEmotion, {
-          worldId: args.worldId,
-          agentId: args.playerId,
-          valence: updatedEmotion.valence,
-          arousal: updatedEmotion.arousal,
-          lastUpdated: updatedEmotion.lastUpdated,
-        });
-
-        console.log(
-          `[Psyche] ${myName}: emotion after conversation — ${outcome} → valence ${emotionDelta.valence >= 0 ? '+' : ''}${emotionDelta.valence}, arousal ${emotionDelta.arousal >= 0 ? '+' : ''}${emotionDelta.arousal}`,
-        );
       }
+    } else {
+      console.debug(`[Psyche] Conversation ${args.conversationId} not archived yet — skipping psyche updates`);
     }
 
     await sleep(Math.random() * 1000);

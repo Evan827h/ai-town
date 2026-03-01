@@ -32,7 +32,7 @@ export interface NeedDefinition {
 export interface AgentNeedState {
   needId: NeedId;
   currentValue: number;
-  lastUpdated: number; // game-time timestamp
+  lastUpdated: number; // wall-clock timestamp (Date.now()), converted to game-minutes on read
 }
 
 export interface ActionEffect {

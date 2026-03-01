@@ -1,6 +1,18 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
+/**
+ * Psyche tables use two ID types:
+ * - agentNeeds, psycheDecisionLog, agentIntents: keyed by agent.id (GameId<'agents'>)
+ * - agentRelationships, agentOpinions, agentEmotions: keyed by player.id (GameId<'players'>)
+ *
+ * This split exists because needs/intents are agent-loop concerns (tied to the agent entity),
+ * while relationships/opinions/emotions are identity concerns (tied to the player persona).
+ * Each agent has exactly one player; the mapping is 1:1.
+ *
+ * Timestamps (lastUpdated, lastInteraction) store wall-clock time via Date.now(),
+ * converted to game-minutes on read via realMsToGameMinutes().
+ */
 export const psycheTables = {
   // Live need state for each agent
   agentNeeds: defineTable({

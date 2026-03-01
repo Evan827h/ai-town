@@ -70,6 +70,7 @@ After your summary, on a new line, write exactly one of these labels to classify
 OUTCOME: positive_social
 OUTCOME: negative_social
 OUTCOME: helpful
+OUTCOME: betrayal
 OUTCOME: impressive
 OUTCOME: neutral`,
     },
