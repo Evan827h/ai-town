@@ -78,6 +78,12 @@ export default function PsychePanel({
     agentId: playerId as string,
   });
 
+  // Desires query (keyed by player ID)
+  const desires = useQuery(api.psyche.functions.getAgentDesires, {
+    worldId,
+    agentId: playerId as string,
+  });
+
   // Memories modal state
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [memoryFilter, setMemoryFilter] = useState<MemoryFilter>('all');
@@ -171,6 +177,41 @@ export default function PsychePanel({
           <EmotionIndicator valence={emotion.valence} arousal={emotion.arousal} />
         ) : (
           <div className="text-sm text-brown-300 text-center py-2">No emotional state yet...</div>
+        )}
+      </div>
+
+      {/* ─── Desires Section ─── */}
+      <SectionHeader title="Desires" className="mt-4" />
+      <div className="mt-2 space-y-2">
+        {desires === undefined ? (
+          <div className="text-sm text-brown-400 text-center py-2">Loading...</div>
+        ) : desires.length > 0 ? (
+          <>
+            {desires.filter((d) => d.type === 'want').length > 0 && (
+              <div>
+                <div className="text-xs text-green-400 font-bold px-1 mb-1">Wants</div>
+                {[...desires]
+                  .filter((d) => d.type === 'want')
+                  .sort((a, b) => b.intensity - a.intensity)
+                  .map((d) => (
+                    <DesireBar key={d._id} type="want" description={d.description} intensity={d.intensity} tags={d.tags} />
+                  ))}
+              </div>
+            )}
+            {desires.filter((d) => d.type === 'fear').length > 0 && (
+              <div>
+                <div className="text-xs text-orange-400 font-bold px-1 mb-1">Fears</div>
+                {[...desires]
+                  .filter((d) => d.type === 'fear')
+                  .sort((a, b) => b.intensity - a.intensity)
+                  .map((d) => (
+                    <DesireBar key={d._id} type="fear" description={d.description} intensity={d.intensity} tags={d.tags} />
+                  ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-sm text-brown-300 text-center py-2">No desires yet — they emerge from reflection...</div>
         )}
       </div>
 
@@ -472,6 +513,67 @@ function EmotionIndicator({ valence, arousal }: { valence: number; arousal: numb
           v:{valence >= 0 ? '+' : ''}{valence.toFixed(2)} a:{arousal >= 0 ? '+' : ''}{arousal.toFixed(2)}
         </span>
       </div>
+    </div>
+  );
+}
+
+// ─── Desire Bar Component ────────────────────────────────────
+
+function getIntensityLabel(intensity: number): string {
+  if (intensity >= 0.7) return 'strong';
+  if (intensity >= 0.4) return 'moderate';
+  return 'slight';
+}
+
+function DesireBar({
+  type,
+  description,
+  intensity,
+  tags,
+}: {
+  type: string;
+  description: string;
+  intensity: number;
+  tags: string[];
+}) {
+  const barColor = type === 'want' ? 'bg-green-500' : 'bg-orange-500';
+  const textColor = type === 'want' ? 'text-green-400' : 'text-orange-400';
+  const percent = Math.round(intensity * 100);
+  const label = getIntensityLabel(intensity);
+
+  return (
+    <div className="px-1 mb-1.5">
+      <div className="flex justify-between text-xs mb-0.5">
+        <span className="text-brown-200 truncate mr-2">{description}</span>
+        <span className={`${textColor} tabular-nums shrink-0`}>
+          {label} ({intensity.toFixed(2)})
+        </span>
+      </div>
+      <div
+        role="meter"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${description}: ${label} (${intensity.toFixed(2)})`}
+        className="w-full bg-brown-900 h-1.5 rounded-sm"
+      >
+        <div
+          className={`h-full rounded-sm transition-all duration-500 ${barColor}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-0.5 mt-0.5">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="text-[9px] px-1 py-0 rounded bg-brown-800 text-brown-400"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
