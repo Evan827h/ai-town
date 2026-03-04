@@ -65,8 +65,17 @@ export async function kickEngine(ctx: MutationCtx, worldId: Id<'worlds'>) {
   if (!engine.running) {
     throw new Error(`Engine ${engineId} isn't currently running`);
   }
+  const now = Date.now();
   const generationNumber = engine.generationNumber + 1;
-  await ctx.db.patch(engineId, { generationNumber });
+  // Jump game time to the present — same as startEngine.
+  // Without this, the engine enters a catch-up loop where agent operation
+  // inputs (timestamped with Date.now()) can't be processed until game time
+  // catches up, but operations time out first, freezing agents.
+  await ctx.db.patch(engineId, {
+    generationNumber,
+    lastStepTs: engine.currentTime,
+    currentTime: now,
+  });
   await ctx.scheduler.runAfter(0, internal.aiTown.main.runStep, {
     worldId: worldId,
     generationNumber,
@@ -101,6 +110,14 @@ export const runStep = internalAction({
       const game = new Game(engine, args.worldId, gameState);
 
       let now = Date.now();
+      // Warn if game time has drifted far behind real time — agent operations
+      // will fail because their inputs (timestamped Date.now()) can't be
+      // processed until game time catches up, but operations time out first.
+      if (engine.currentTime && now - engine.currentTime > 30_000) {
+        console.warn(
+          `Game time is ${((now - engine.currentTime) / 1000).toFixed(0)}s behind real time — agents may freeze`,
+        );
+      }
       const deadline = now + args.maxDuration;
       while (now < deadline) {
         await game.runStep(ctx, now);
