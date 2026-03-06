@@ -267,7 +267,12 @@ function worldGroundingPrompt(): string[] {
 
 function currentActivityPrompt(
   player: { position: { x: number; y: number } },
-  recentDecisions: Array<{ chosenActionId: string; chosenActionName: string; chosenActionEmoji: string }>,
+  recentDecisions: Array<{
+    chosenActionId: string;
+    chosenActionName: string;
+    chosenActionEmoji: string;
+    needOverride?: { needId: string; actionName: string; reason: string } | null;
+  }>,
 ): string[] {
   const prompt: string[] = [];
   const locationId = getLocationAtPosition(player.position);
@@ -286,7 +291,13 @@ function currentActivityPrompt(
     .slice(0, 3);
 
   if (uniqueDecisions.length > 0) {
-    const parts = uniqueDecisions.map((d) => `${d.chosenActionName} ${d.chosenActionEmoji}`);
+    const parts = uniqueDecisions.map((d) => {
+      const label = `${d.chosenActionName} ${d.chosenActionEmoji}`;
+      if (d.needOverride) {
+        return `${label} (reluctantly — ${d.needOverride.reason})`;
+      }
+      return label;
+    });
     prompt.push(`Your recent activities: ${parts.join(', then ')}.`);
   }
 

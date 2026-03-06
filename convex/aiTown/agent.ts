@@ -88,7 +88,7 @@ export class Agent {
         && !isSleeping(player, now)) {
       const nearbyFreePlayers = [...game.world.players.values()]
         .filter((p) => p.id !== player.id)
-        .filter((p) => !p.activity || p.activity.until <= now || true) // include all nearby
+        .filter((p) => !p.activity || p.activity.until <= now) // only target idle players
         .filter((p) => ![...game.world.conversations.values()].find((c) => c.participants.has(p.id)))
         .filter((p) => !isSleeping(p, now))
         .filter((p) => distance(player.position, p.position) < ACTIVITY_CONVERSATION_DISTANCE);

@@ -574,6 +574,23 @@ export const getAgentRelationships = query({
   },
 });
 
+/** Look up a player's name + description by player ID (for LLM action menu + moral profile) */
+export const getPlayerProfile = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    playerId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const desc = await ctx.db
+      .query('playerDescriptions')
+      .withIndex('worldId', (q) =>
+        q.eq('worldId', args.worldId).eq('playerId', args.playerId),
+      )
+      .first();
+    return desc ? { name: desc.name, description: desc.description } : null;
+  },
+});
+
 /** Look up a player's character name by player ID (for moral profile selection) */
 export const getPlayerName = internalQuery({
   args: {
@@ -667,6 +684,14 @@ export const logDecision = internalMutation({
         }),
       ),
     ),
+    needOverride: v.optional(
+      v.object({
+        needId: v.string(),
+        actionId: v.string(),
+        actionName: v.string(),
+        reason: v.string(),
+      }),
+    ),
   },
   handler: async (ctx, args) => {
     await ctx.db.insert('psycheDecisionLog', {
@@ -681,6 +706,7 @@ export const logDecision = internalMutation({
       needsSnapshot: args.needsSnapshot,
       location: args.location,
       conflicts: args.conflicts,
+      needOverride: args.needOverride,
     });
 
     // Cleanup: keep only the latest 50 entries per agent

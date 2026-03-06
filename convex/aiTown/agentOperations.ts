@@ -21,6 +21,8 @@ import { depleteNeeds, applyActionEffects, initializeNeeds } from '../../src/psy
 import { needRegistry } from '../../src/psyche/data/needs';
 import { getActionsForLocation, getAllActions } from '../../src/psyche/data/actions';
 import { getLocationAtPosition, getLocationDestination } from '../../src/psyche/data/locations';
+import { preFilterActions, getGameTimeOfDay, getGameMinutesSinceMidnight, injectCriticalNeedActions, NeedOverride } from '../../src/psyche/actionPrompt';
+import { generateActionMenu } from '../agent/actionMenu';
 import { ActionEffect, AgentNeedState, AgentOpinion, Desire, DesireTag, EmotionalState, NeedId, RelationshipEdge, TopicId } from '../../src/psyche/registries';
 import {
   applyRelationshipModifiers,
@@ -372,7 +374,7 @@ export const agentGenerateMessage = internalAction({
           now,
         );
 
-        // Score with predicted post-conversation needs
+        // Score with predicted post-conversation needs (skip LLM menu for speed)
         const result = await scoreNextAction(
           ctx,
           args.worldId,
@@ -381,6 +383,7 @@ export const agentGenerateMessage = internalAction({
           promptData.player.position,
           [], // no nearby player info available here — relationship modifiers will be approximate
           predictedNeeds,
+          true, // skipLLMMenu — pre-leave scoring should be fast
         );
 
         if (result && result.scored.length > 0) {
@@ -457,6 +460,7 @@ export const agentGenerateMessage = internalAction({
  *
  * @param predictedNeeds - If provided, use these instead of fetching/depleting from DB.
  *                         Used for pre-leave scoring where we predict post-conversation needs.
+ * @param skipLLMMenu - If true, skip LLM action menu curation (used for pre-leave scoring).
  * @returns The top scored action and the needs used for scoring, or null if no actions available.
  */
 async function scoreNextAction(
@@ -467,7 +471,8 @@ async function scoreNextAction(
   playerPosition: { x: number; y: number },
   nearbyPlayerIds: string[],
   predictedNeeds?: AgentNeedState[],
-): Promise<{ scored: ReturnType<typeof scoreActions>; needs: AgentNeedState[]; location: string; conflicts: MoralConflict[] } | null> {
+  skipLLMMenu?: boolean,
+): Promise<{ scored: ReturnType<typeof scoreActions>; needs: AgentNeedState[]; location: string; conflicts: MoralConflict[]; overrides: NeedOverride[] } | null> {
   let agentNeeds: AgentNeedState[];
 
   if (predictedNeeds) {
@@ -499,9 +504,53 @@ async function scoreNextAction(
 
   const location = getLocationAtPosition(playerPosition);
 
-  const allAvailableActions = getAllActions();
+  // Look up the character's name + personality (used for both LLM menu and moral profile)
+  const profile = await ctx.runQuery(internal.psyche.functions.getPlayerProfile, {
+    worldId,
+    playerId,
+  });
+  const characterName = profile?.name ?? null;
 
-  const baseScored = scoreActions(agentNeeds, allAvailableActions, needRegistry);
+  // Step 3.5: LLM Action Menu — curate contextually relevant actions
+  const allAvailableActions = getAllActions();
+  const preFiltered = preFilterActions(allAvailableActions, location, agentNeeds, needRegistry);
+  let actionsToScore = preFiltered;
+  let overrides: NeedOverride[] = [];
+
+  if (!skipLLMMenu) {
+    try {
+      const gameMinutes = getGameMinutesSinceMidnight(Date.now(), GAME_TIME_SCALE);
+      const timeOfDay = getGameTimeOfDay(gameMinutes);
+      const menu = await generateActionMenu(ctx, {
+        characterName: characterName ?? 'Agent',
+        personality: profile?.description ?? '',
+        location,
+        timeOfDay,
+        needs: agentNeeds,
+        actions: preFiltered,
+        worldId,
+        playerId,
+      });
+      if (menu.actionIds.length > 0) {
+        actionsToScore = preFiltered.filter((a) => menu.actionIds.includes(a.id));
+      }
+      console.log(`[Psyche] Action menu for ${characterName}: ${menu.actionIds.join(', ')} (${menu.rationale})`);
+
+      // Safety hatch: inject high-payoff replenishers the LLM excluded for critical needs
+      const injection = injectCriticalNeedActions(actionsToScore, preFiltered, agentNeeds, needRegistry);
+      actionsToScore = injection.actions;
+      overrides = injection.overrides;
+      if (overrides.length > 0) {
+        console.log(
+          `[Psyche] Need override for ${characterName}: ${overrides.map((o) => `${o.actionName} (${o.reason})`).join(', ')}`,
+        );
+      }
+    } catch (e) {
+      console.warn('[Psyche] Action menu failed, using full pre-filtered set:', e);
+    }
+  }
+
+  const baseScored = scoreActions(agentNeeds, actionsToScore, needRegistry);
 
   // Apply relationship modifiers
   const relDocs = await ctx.runQuery(internal.psyche.functions.getRelationshipsForAgent, {
@@ -520,11 +569,7 @@ async function scoreNextAction(
   }));
   const relScored = applyRelationshipModifiers(baseScored, relationships, nearbyPlayerIds);
 
-  // Look up the character's name to select their moral profile
-  const characterName = await ctx.runQuery(internal.psyche.functions.getPlayerName, {
-    worldId,
-    playerId,
-  });
+  // Apply moral filter using character's moral profile
   const moralProfile = MORAL_PROFILES[characterName ?? ''] ?? DEFAULT_MORAL_PROFILE;
   const { actions: scored, conflicts } = applyMoralFilter(relScored, moralProfile);
 
@@ -555,7 +600,7 @@ async function scoreNextAction(
     finalScored = applyDesireModifiers(scored, desires);
   }
 
-  return { scored: finalScored, needs: agentNeeds, location, conflicts };
+  return { scored: finalScored, needs: agentNeeds, location, conflicts, overrides };
 }
 
 export const agentDoSomething = internalAction({
@@ -1020,7 +1065,7 @@ export const agentDoSomething = internalAction({
           })),
         });
 
-        await logPsycheDecision(ctx, args.worldId, agent.id, now, scored, agentNeeds, location, result.conflicts);
+        await logPsycheDecision(ctx, args.worldId, agent.id, now, scored, agentNeeds, location, result.conflicts, result.overrides);
 
         await sleep(Math.random() * 1000);
         await ctx.runMutation(api.aiTown.main.sendInput, {
@@ -1072,7 +1117,7 @@ export const agentDoSomething = internalAction({
       });
     }
 
-    await logPsycheDecision(ctx, args.worldId, agent.id, now, scored, updatedNeeds, location, result.conflicts);
+    await logPsycheDecision(ctx, args.worldId, agent.id, now, scored, updatedNeeds, location, result.conflicts, result.overrides);
 
     // Start the activity
     await sleep(Math.random() * 1000);
@@ -1103,6 +1148,7 @@ async function logPsycheDecision(
   needs: AgentNeedState[],
   location: string,
   conflicts?: MoralConflict[],
+  overrides?: NeedOverride[],
 ) {
   const best = scored[0];
   const alternatives = scored.slice(1, 6).map((s) => ({
@@ -1128,6 +1174,9 @@ async function logPsycheDecision(
     };
   });
 
+  // If the chosen action was injected by the safety hatch, record the override
+  const activeOverride = overrides?.find((o) => o.injectedActionId === best.action.id);
+
   await ctx.runMutation(internal.psyche.functions.logDecision, {
     worldId,
     agentId: agentIdValue,
@@ -1144,6 +1193,14 @@ async function logPsycheDecision(
       penalty: c.penalty,
       values: c.values,
     })),
+    needOverride: activeOverride
+      ? {
+          needId: activeOverride.needId,
+          actionId: activeOverride.injectedActionId,
+          actionName: activeOverride.actionName,
+          reason: activeOverride.reason,
+        }
+      : undefined,
   });
 }
 

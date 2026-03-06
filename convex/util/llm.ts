@@ -153,7 +153,7 @@ export async function chatCompletion(
     if (lastUserIdx >= 0) {
       body.messages[lastUserIdx] = {
         ...body.messages[lastUserIdx],
-        content: body.messages[lastUserIdx].content + ' /no_think',
+        content: body.messages[lastUserIdx].content + '\n/no_think',
       };
     }
   }

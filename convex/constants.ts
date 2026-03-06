@@ -18,8 +18,9 @@ export const COLLISION_THRESHOLD = 0.75;
 // How many human players can be in a world at once.
 export const MAX_HUMAN_PLAYERS = 8;
 
-// Don't talk to anyone for 15s after having a conversation.
-export const CONVERSATION_COOLDOWN = 15000;
+// Don't talk to anyone for 45s after having a conversation.
+// At GAME_TIME_SCALE=1.0, this is 45 game-minutes — enough for most activities to complete.
+export const CONVERSATION_COOLDOWN = 45_000;
 
 // Don't do another activity for 10s after doing one.
 export const ACTIVITY_COOLDOWN = 10_000;

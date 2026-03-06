@@ -65,6 +65,15 @@ export const psycheTables = {
         }),
       ),
     ),
+    // When the safety hatch injected an action the LLM didn't suggest
+    needOverride: v.optional(
+      v.object({
+        needId: v.string(),
+        actionId: v.string(),
+        actionName: v.string(),
+        reason: v.string(),
+      }),
+    ),
   }).index('by_agent', ['worldId', 'agentId']),
 
   // Travel commitment — stores the intended action when agent walks to a location.
